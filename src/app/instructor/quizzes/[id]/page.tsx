@@ -2,11 +2,19 @@
 
 import { useParams } from "next/navigation";
 import { FormEvent, useEffect, useState } from "react";
-import { Alert, Button, Card, Field, inputClass } from "../../../../components/ui";
+import { Modal } from "../../../../components/dialog";
+import { Alert, Button, Card, inputClass } from "../../../../components/ui";
 import { api, errorMessage } from "../../../../lib/api";
 import { useAuth } from "../../../../lib/auth";
-import { formatWhen, fromLocalInput, toLocalInput } from "../../../../lib/format";
-import type { ClassGroup, Question, Quiz } from "../../../../lib/types";
+import { formatWhen } from "../../../../lib/format";
+import type { ClassGroup, Question, Quiz, QuizStatus } from "../../../../lib/types";
+import { emptyQuizForm, formFromQuiz, QuizEditorFields, quizPayload, type QuizFormState } from "../editor";
+
+const statusLabels: Record<QuizStatus, string> = {
+  DRAFT: "Draft",
+  PUBLISHED: "Published",
+  CLOSED: "Closed",
+};
 
 export default function QuizBuilderPage() {
   const { id } = useParams<{ id: string }>();
@@ -14,17 +22,12 @@ export default function QuizBuilderPage() {
   const [quiz, setQuiz] = useState<Quiz | null>(null);
   const [bank, setBank] = useState<Question[]>([]);
   const [classes, setClasses] = useState<ClassGroup[]>([]);
-  const [selected, setSelected] = useState<number[]>([]);
+  const [form, setForm] = useState<QuizFormState>(emptyQuizForm);
+  const [editing, setEditing] = useState(false);
   const [classId, setClassId] = useState("");
   const [error, setError] = useState<unknown>(null);
-  const [title, setTitle] = useState("");
-  const [instructions, setInstructions] = useState("");
-  const [duration, setDuration] = useState(20);
-  const [start, setStart] = useState("");
-  const [end, setEnd] = useState("");
-  const [maxAttempts, setMaxAttempts] = useState(1);
-  const [passingMarks, setPassingMarks] = useState(1);
-  const [shuffle, setShuffle] = useState(true);
+  const [formError, setFormError] = useState<unknown>(null);
+  const [busy, setBusy] = useState(false);
 
   useEffect(() => {
     if (!token) return;
@@ -36,45 +39,48 @@ export default function QuizBuilderPage() {
       setQuiz(nextQuiz);
       setBank(questions);
       setClasses(groups);
-      setSelected(nextQuiz.questions.map((question) => question.questionId));
-      setTitle(nextQuiz.title);
-      setInstructions(nextQuiz.instructions || "");
-      setDuration(nextQuiz.durationMinutes);
-      setStart(toLocalInput(nextQuiz.startTime));
-      setEnd(toLocalInput(nextQuiz.endTime));
-      setMaxAttempts(nextQuiz.maxAttempts);
-      setPassingMarks(nextQuiz.passingMarks);
-      setShuffle(nextQuiz.shuffleQuestions);
+      setForm(formFromQuiz(nextQuiz));
     }).catch(setError);
   }, [token, id]);
 
+  function openEdit() {
+    if (!quiz) return;
+    setForm(formFromQuiz(quiz));
+    setFormError(null);
+    setEditing(true);
+  }
+
+  function closeEdit() {
+    if (quiz) setForm(formFromQuiz(quiz));
+    setFormError(null);
+    setEditing(false);
+  }
+
   async function save(event: FormEvent) {
     event.preventDefault();
-    setError(null);
+    setBusy(true);
+    setFormError(null);
     try {
-      setQuiz(await api<Quiz>(`/api/quizzes/${id}`, {
+      const next = await api<Quiz>(`/api/quizzes/${id}`, {
         method: "PUT",
-        body: JSON.stringify({
-          title,
-          instructions,
-          durationMinutes: duration,
-          startTime: fromLocalInput(start),
-          endTime: fromLocalInput(end),
-          shuffleQuestions: shuffle,
-          maxAttempts,
-          passingMarks,
-          questionIds: selected,
-        }),
-      }, token));
+        body: JSON.stringify(quizPayload(form)),
+      }, token);
+      setQuiz(next);
+      setForm(formFromQuiz(next));
+      setEditing(false);
     } catch (caught) {
-      setError(caught);
+      setFormError(caught);
+    } finally {
+      setBusy(false);
     }
   }
 
   async function publish() {
     setError(null);
     try {
-      setQuiz(await api<Quiz>(`/api/quizzes/${id}/publish`, { method: "POST" }, token));
+      const next = await api<Quiz>(`/api/quizzes/${id}/publish`, { method: "POST" }, token);
+      setQuiz(next);
+      setForm(formFromQuiz(next));
     } catch (caught) {
       setError(caught);
     }
@@ -83,7 +89,9 @@ export default function QuizBuilderPage() {
   async function closeQuiz() {
     setError(null);
     try {
-      setQuiz(await api<Quiz>(`/api/quizzes/${id}/close`, { method: "POST" }, token));
+      const next = await api<Quiz>(`/api/quizzes/${id}/close`, { method: "POST" }, token);
+      setQuiz(next);
+      setForm(formFromQuiz(next));
     } catch (caught) {
       setError(caught);
     }
@@ -92,52 +100,49 @@ export default function QuizBuilderPage() {
   async function assign() {
     setError(null);
     try {
-      setQuiz(await api<Quiz>(`/api/quizzes/${id}/assign`, { method: "POST", body: JSON.stringify({ classId: Number(classId), studentIds: [] }) }, token));
+      const next = await api<Quiz>(`/api/quizzes/${id}/assign`, { method: "POST", body: JSON.stringify({ classId: Number(classId), studentIds: [] }) }, token);
+      setQuiz(next);
     } catch (caught) {
       setError(caught);
     }
   }
 
-  function toggle(questionId: number) {
-    setSelected((current) => current.includes(questionId) ? current.filter((item) => item !== questionId) : [...current, questionId]);
-  }
-
   if (!quiz) return <p className="text-sm text-ink/60">Loading quiz…</p>;
   const draft = quiz.status === "DRAFT";
+  const questions = [...quiz.questions].sort((a, b) => a.position - b.position);
 
   return (
     <>
-      <p className="text-xs uppercase tracking-wide text-ink/50">{quiz.status} · {quiz.totalMarks} marks</p>
-      <h1 className="font-serif text-4xl">{quiz.title}</h1>
+      <div className="flex flex-wrap items-end justify-between gap-3">
+        <div>
+          <p className="text-xs uppercase tracking-wide text-ink/50">{statusLabels[quiz.status]} · {quiz.totalMarks} marks</p>
+          <h1 className="font-serif text-4xl">{quiz.title}</h1>
+          {quiz.instructions ? <p className="mt-2 whitespace-pre-wrap text-sm text-ink/70">{quiz.instructions}</p> : null}
+        </div>
+        {draft ? <Button tone="ghost" onClick={openEdit}>Edit</Button> : null}
+      </div>
       {error ? <Alert>{errorMessage(error)}</Alert> : null}
       <Card>
-        <form onSubmit={save} className="space-y-4">
-          <Field label="Title"><input className={inputClass()} value={title} onChange={(event) => setTitle(event.target.value)} disabled={!draft} required /></Field>
-          <Field label="Instructions"><textarea className={inputClass()} rows={2} value={instructions} onChange={(event) => setInstructions(event.target.value)} disabled={!draft} /></Field>
-          <div className="grid gap-3 md:grid-cols-2">
-            <Field label="Minutes"><input className={inputClass()} type="number" min={1} value={duration} onChange={(event) => setDuration(Number(event.target.value))} disabled={!draft} /></Field>
-            <Field label="Passing marks"><input className={inputClass()} type="number" min={0} value={passingMarks} onChange={(event) => setPassingMarks(Number(event.target.value))} disabled={!draft} /></Field>
-            <Field label="Opens"><input className={inputClass()} type="datetime-local" value={start} onChange={(event) => setStart(event.target.value)} disabled={!draft} required /></Field>
-            <Field label="Closes"><input className={inputClass()} type="datetime-local" value={end} onChange={(event) => setEnd(event.target.value)} disabled={!draft} required /></Field>
-            <Field label="Attempts allowed"><input className={inputClass()} type="number" min={1} value={maxAttempts} onChange={(event) => setMaxAttempts(Number(event.target.value))} disabled={!draft} /></Field>
-            <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={shuffle} onChange={(event) => setShuffle(event.target.checked)} disabled={!draft} /> Shuffle question order</label>
-          </div>
-          {draft ? <Button type="submit">Save draft</Button> : <p className="text-sm text-ink/60">Published quizzes stay fixed. Close the window if you want to stop new attempts.</p>}
-        </form>
-      </Card>
-      <Card>
-        <h2 className="font-serif text-2xl">Questions</h2>
-        {bank.length === 0 ? <p className="mt-2 text-sm text-ink/60">Add questions to the bank first.</p> : null}
-        <ul className="mt-3 space-y-2">
-          {bank.map((question) => (
-            <li key={question.id}>
-              <label className="flex gap-3 text-sm">
-                <input type="checkbox" checked={selected.includes(question.id)} onChange={() => toggle(question.id)} disabled={!draft} />
-                <span><span className="text-ink/50">{question.type}</span> · {question.text}</span>
-              </label>
-            </li>
-          ))}
-        </ul>
+        <dl className="grid gap-2 text-sm sm:grid-cols-2">
+          <div>Opens <span className="font-medium">{formatWhen(quiz.startTime)}</span></div>
+          <div>Closes <span className="font-medium">{formatWhen(quiz.endTime)}</span></div>
+          <div>Minutes <span className="font-medium">{quiz.durationMinutes}</span></div>
+          <div>Attempts <span className="font-medium">{quiz.maxAttempts}</span></div>
+          <div>Passing marks <span className="font-medium">{quiz.passingMarks}</span></div>
+          <div>Shuffle <span className="font-medium">{quiz.shuffleQuestions ? "On" : "Off"}</span></div>
+        </dl>
+        <h2 className="mt-4 font-serif text-2xl">Questions</h2>
+        {questions.length === 0 ? <p className="mt-2 text-sm text-ink/60">No questions yet.</p> : (
+          <ol className="mt-3 space-y-1.5 text-sm">
+            {questions.map((question, index) => (
+              <li key={question.questionId} className="rounded-xl bg-paper px-3 py-2">
+                {index + 1}. {question.text}
+                <span className="text-ink/50"> · {question.marks} {question.marks === 1 ? "mark" : "marks"}</span>
+              </li>
+            ))}
+          </ol>
+        )}
+        {draft ? null : <p className="mt-4 text-sm text-ink/60">Published quizzes stay fixed. Close the window if you want to stop new attempts.</p>}
       </Card>
       <div className="flex flex-wrap gap-2">
         {draft ? <Button onClick={publish}>Publish</Button> : null}
@@ -147,19 +152,35 @@ export default function QuizBuilderPage() {
         <Card>
           <h2 className="font-serif text-2xl">Assign</h2>
           <div className="mt-3 flex flex-wrap gap-2">
-            <select className={inputClass()} value={classId} onChange={(event) => setClassId(event.target.value)}>
+            <select className={`${inputClass()} max-w-sm`} value={classId} onChange={(event) => setClassId(event.target.value)}>
               <option value="">Choose a class</option>
               {classes.map((classGroup) => <option key={classGroup.id} value={classGroup.id}>{classGroup.name}</option>)}
             </select>
             <Button onClick={assign} disabled={!classId}>Assign</Button>
           </div>
           <ul className="mt-3 text-sm">
-            {quiz.assignments.map((assignment) => (
+            {quiz.assignments.length === 0 ? <li className="text-ink/50">Not assigned yet.</li> : quiz.assignments.map((assignment) => (
               <li key={assignment.id}>{assignment.className || assignment.studentName} · {formatWhen(quiz.startTime)} to {formatWhen(quiz.endTime)}</li>
             ))}
           </ul>
         </Card>
       ) : null}
+      <Modal
+        width="lg"
+        open={editing}
+        onOpenChange={(open) => { if (!open) closeEdit(); }}
+        title="Edit quiz"
+        description="Update the window, marks, and questions."
+      >
+        <form onSubmit={save} className="space-y-4">
+          {formError ? <Alert>{errorMessage(formError)}</Alert> : null}
+          <QuizEditorFields form={form} setForm={setForm} bank={bank} />
+          <div className="flex justify-end gap-2">
+            <Button tone="ghost" onClick={closeEdit}>Cancel</Button>
+            <Button type="submit" disabled={busy}>{busy ? "Saving…" : "Save changes"}</Button>
+          </div>
+        </form>
+      </Modal>
     </>
   );
 }
