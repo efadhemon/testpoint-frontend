@@ -6,19 +6,16 @@ This Next.js app is the interface for three roles. It calls the Spring Boot API 
 
 ## Course and student information
 
-| | |
-| --- | --- |
-| Course | Advanced Java Lab (CSE352), Section 03 |
-| Department | Computer Science and Engineering, Southeast University |
-| Submitted to | Miftahul Sheikh, Lecturer, Department of CSE |
+|              |                                                        |
+| ------------ | ------------------------------------------------------ |
+| Course       | Advanced Java Lab (CSE352), Section 03                 |
+| Department   | Computer Science and Engineering, Southeast University |
+| Submitted to | Miftahul Sheikh, Lecturer, Department of CSE           |
 
-| SL | Name | Student ID |
-| --- | --- | --- |
-| 1 | Emon Hossain | 2023000010093 |
-| 2 | Md. Ehtisamul Haque | 2024100010099 |
-| 3 | Md Sajjad Hossain | 2024000010009 |
-| 4 | Abadul Hasan | 2020000010055 |
-| 5 | Tanbir Islam | 2023100010074 |
+| SL  | Name              | Student ID    |
+| --- | ----------------- | ------------- |
+| 1   | Emon Hossain      | 2023000010093 |
+| 2   | Md Sajjad Hossain | 2024000010009 |
 
 ## What you can do in the app
 
@@ -48,11 +45,11 @@ Signed-in users are sent to their own desk. A student cannot open the instructor
 
 ## Technology
 
-| Piece | Choice |
-| --- | --- |
-| Framework | Next.js 16 (App Router) |
-| UI | React 19, TypeScript, Tailwind CSS 4 |
-| Auth | JWT stored in the browser and sent as `Authorization: Bearer` |
+| Piece     | Choice                                                        |
+| --------- | ------------------------------------------------------------- |
+| Framework | Next.js 16 (App Router)                                       |
+| UI        | React 19, TypeScript, Tailwind CSS 4                          |
+| Auth      | JWT stored in the browser and sent as `Authorization: Bearer` |
 
 ## Requirements
 
@@ -79,22 +76,22 @@ npm start
 
 ## Pages
 
-| Path | Role |
-| --- | --- |
-| `/` | Landing. Signed-in users are redirected to their desk |
-| `/login`, `/register` | Public |
-| `/admin` | Admin |
-| `/instructor` | Instructor overview |
-| `/instructor/classes` | Classes and join codes |
-| `/instructor/questions` | Question bank |
-| `/instructor/questions/generate` | Draft questions from a PDF |
-| `/instructor/quizzes` | Quiz list and create |
-| `/instructor/quizzes/[id]` | Edit, publish, assign |
-| `/instructor/grading` | Short-answer review |
-| `/instructor/analytics/[quizId]` | Quiz analytics |
-| `/student` | Assigned quizzes and class join |
-| `/student/attempt/[id]` | Timed paper |
-| `/student/results/[id]` | Score and feedback |
-| `/student/history` | Past attempts |
+| Path                             | Role                                                  |
+| -------------------------------- | ----------------------------------------------------- |
+| `/`                              | Landing. Signed-in users are redirected to their desk |
+| `/login`, `/register`            | Public                                                |
+| `/admin`                         | Admin                                                 |
+| `/instructor`                    | Instructor overview                                   |
+| `/instructor/classes`            | Classes and join codes                                |
+| `/instructor/questions`          | Question bank                                         |
+| `/instructor/questions/generate` | Draft questions from a PDF                            |
+| `/instructor/quizzes`            | Quiz list and create                                  |
+| `/instructor/quizzes/[id]`       | Edit, publish, assign                                 |
+| `/instructor/grading`            | Short-answer review                                   |
+| `/instructor/analytics/[quizId]` | Quiz analytics                                        |
+| `/student`                       | Assigned quizzes and class join                       |
+| `/student/attempt/[id]`          | Timed paper                                           |
+| `/student/results/[id]`          | Score and feedback                                    |
+| `/student/history`               | Past attempts                                         |
 
 Demo accounts are created by the backend seeder. See the backend README for those emails and passwords.
