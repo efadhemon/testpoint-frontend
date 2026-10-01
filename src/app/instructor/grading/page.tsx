@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { Alert, Button, Card, Field, inputClass } from "../../../components/ui";
 import { api, errorMessage } from "../../../lib/api";
 import { useAuth } from "../../../lib/auth";
@@ -14,16 +14,28 @@ export default function GradingPage() {
   const [feedback, setFeedback] = useState<Record<number, string>>({});
   const [error, setError] = useState<unknown>(null);
 
-  async function load() {
-    const rows = await api<PendingAnswer[]>("/api/grading/pending", {}, token);
+  const fetchPending = useCallback(
+    () => api<PendingAnswer[]>("/api/grading/pending", {}, token),
+    [token],
+  );
+
+  const applyPending = useCallback((rows: PendingAnswer[]) => {
     setPending(rows);
     setMarks(Object.fromEntries(rows.map((row) => [row.answerId, row.marks])));
     setReady(true);
+  }, []);
+
+  async function load() {
+    applyPending(await fetchPending());
   }
 
   useEffect(() => {
-    if (token) load().catch((caught) => { setError(caught); setReady(true); });
-  }, [token]);
+    if (!token) return;
+    fetchPending().then(applyPending).catch((caught) => {
+      setError(caught);
+      setReady(true);
+    });
+  }, [token, fetchPending, applyPending]);
 
   async function grade(answerId: number) {
     setError(null);

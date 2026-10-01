@@ -1,6 +1,7 @@
 "use client";
 
-import { FormEvent, useEffect, useState } from "react";
+import { FormEvent, useCallback, useEffect, useState } from "react";
+import { Modal } from "../../../components/dialog";
 import { Alert, Button, Card, Field, inputClass } from "../../../components/ui";
 import { api, errorMessage } from "../../../lib/api";
 import { useAuth } from "../../../lib/auth";
@@ -12,14 +13,24 @@ export default function ClassesPage() {
   const [name, setName] = useState("");
   const [emails, setEmails] = useState<Record<number, string>>({});
   const [error, setError] = useState<unknown>(null);
+  const [renaming, setRenaming] = useState<ClassGroup | null>(null);
+  const [renameValue, setRenameValue] = useState("");
+  const [deleting, setDeleting] = useState<ClassGroup | null>(null);
+  const [busy, setBusy] = useState(false);
+
+  const fetchClasses = useCallback(
+    () => api<ClassGroup[]>("/api/classes", {}, token),
+    [token],
+  );
 
   async function load() {
-    setClasses(await api<ClassGroup[]>("/api/classes", {}, token));
+    setClasses(await fetchClasses());
   }
 
   useEffect(() => {
-    if (token) load().catch(setError);
-  }, [token]);
+    if (!token) return;
+    fetchClasses().then(setClasses).catch(setError);
+  }, [token, fetchClasses]);
 
   async function create(event: FormEvent) {
     event.preventDefault();
@@ -44,17 +55,40 @@ export default function ClassesPage() {
     }
   }
 
-  async function rename(classGroup: ClassGroup) {
-    const next = window.prompt("Class name", classGroup.name);
-    if (!next) return;
-    await api(`/api/classes/${classGroup.id}`, { method: "PUT", body: JSON.stringify({ name: next }) }, token);
-    await load();
+  function openRename(classGroup: ClassGroup) {
+    setRenaming(classGroup);
+    setRenameValue(classGroup.name);
   }
 
-  async function remove(id: number) {
-    if (!window.confirm("Delete this class?")) return;
-    await api(`/api/classes/${id}`, { method: "DELETE" }, token);
-    await load();
+  async function rename(event: FormEvent) {
+    event.preventDefault();
+    if (!renaming) return;
+    setBusy(true);
+    setError(null);
+    try {
+      await api(`/api/classes/${renaming.id}`, { method: "PUT", body: JSON.stringify({ name: renameValue.trim() }) }, token);
+      setRenaming(null);
+      await load();
+    } catch (caught) {
+      setError(caught);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function remove() {
+    if (!deleting) return;
+    setBusy(true);
+    setError(null);
+    try {
+      await api(`/api/classes/${deleting.id}`, { method: "DELETE" }, token);
+      setDeleting(null);
+      await load();
+    } catch (caught) {
+      setError(caught);
+    } finally {
+      setBusy(false);
+    }
   }
 
   return (
@@ -79,8 +113,8 @@ export default function ClassesPage() {
               <p className="text-sm text-ink/60">Join code <span className="font-semibold text-pine">{classGroup.joinCode}</span></p>
             </div>
             <div className="flex gap-2">
-              <Button tone="ghost" onClick={() => rename(classGroup)}>Rename</Button>
-              <Button tone="danger" onClick={() => remove(classGroup.id)}>Delete</Button>
+              <Button tone="ghost" onClick={() => openRename(classGroup)}>Rename</Button>
+              <Button tone="danger" onClick={() => setDeleting(classGroup)}>Delete</Button>
             </div>
           </div>
           <ul className="mt-4 space-y-1 text-sm">
@@ -94,6 +128,33 @@ export default function ClassesPage() {
           </div>
         </Card>
       ))}
+      <Modal
+        open={renaming !== null}
+        onOpenChange={(open) => { if (!open) setRenaming(null); }}
+        title="Rename class"
+        description={renaming ? `Update the name for ${renaming.name}.` : undefined}
+      >
+        <form onSubmit={rename} className="space-y-4">
+          <Field label="Class name">
+            <input className={inputClass()} value={renameValue} onChange={(event) => setRenameValue(event.target.value)} required autoFocus />
+          </Field>
+          <div className="flex justify-end gap-2">
+            <Button tone="ghost" onClick={() => setRenaming(null)}>Cancel</Button>
+            <Button type="submit" disabled={busy || renameValue.trim().length === 0}>{busy ? "Saving…" : "Save"}</Button>
+          </div>
+        </form>
+      </Modal>
+      <Modal
+        open={deleting !== null}
+        onOpenChange={(open) => { if (!open) setDeleting(null); }}
+        title="Delete class"
+        description={deleting ? `${deleting.name} and its enrollments will be removed. Assigned quizzes stay in your list.` : undefined}
+      >
+        <div className="flex justify-end gap-2">
+          <Button tone="ghost" onClick={() => setDeleting(null)}>Cancel</Button>
+          <Button tone="danger" disabled={busy} onClick={remove}>{busy ? "Deleting…" : "Delete"}</Button>
+        </div>
+      </Modal>
     </>
   );
 }

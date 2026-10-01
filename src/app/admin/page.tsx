@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { Shell } from "../../components/Shell";
 import { Alert, Card } from "../../components/ui";
 import { api, errorMessage } from "../../lib/api";
@@ -21,19 +21,27 @@ function AdminDesk() {
   const [stats, setStats] = useState<AdminStats | null>(null);
   const [error, setError] = useState<unknown>(null);
 
-  async function load() {
-    const [people, counts] = await Promise.all([
+  const fetchDesk = useCallback(
+    () => Promise.all([
       api<User[]>("/api/admin/users", {}, token),
       api<AdminStats>("/api/admin/stats", {}, token),
-    ]);
+    ]),
+    [token],
+  );
+
+  async function load() {
+    const [people, counts] = await fetchDesk();
     setUsers(people);
     setStats(counts);
   }
 
   useEffect(() => {
     if (!token) return;
-    load().catch(setError);
-  }, [token]);
+    fetchDesk().then(([people, counts]) => {
+      setUsers(people);
+      setStats(counts);
+    }).catch(setError);
+  }, [token, fetchDesk]);
 
   async function update(id: number, body: { role?: Role; enabled?: boolean }) {
     setError(null);

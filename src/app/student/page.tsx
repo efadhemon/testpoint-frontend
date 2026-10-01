@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { FormEvent, useEffect, useState } from "react";
+import { FormEvent, useCallback, useEffect, useState } from "react";
 import { Alert, Button, Card, Field, inputClass } from "../../components/ui";
 import { api, errorMessage } from "../../lib/api";
 import { useAuth } from "../../lib/auth";
@@ -16,18 +16,27 @@ export default function StudentHome() {
   const [code, setCode] = useState("");
   const [error, setError] = useState<unknown>(null);
 
-  async function load() {
-    const [papers, groups] = await Promise.all([
+  const fetchDesk = useCallback(
+    () => Promise.all([
       api<StudentQuiz[]>("/api/student/quizzes", {}, token),
       api<ClassGroup[]>("/api/classes", {}, token),
-    ]);
+    ]),
+    [token],
+  );
+
+  async function load() {
+    const [papers, groups] = await fetchDesk();
     setQuizzes(papers);
     setClasses(groups);
   }
 
   useEffect(() => {
-    if (token) load().catch(setError);
-  }, [token]);
+    if (!token) return;
+    fetchDesk().then(([papers, groups]) => {
+      setQuizzes(papers);
+      setClasses(groups);
+    }).catch(setError);
+  }, [token, fetchDesk]);
 
   async function join(event: FormEvent) {
     event.preventDefault();

@@ -26,28 +26,26 @@ export default function QuizBuilderPage() {
   const [passingMarks, setPassingMarks] = useState(1);
   const [shuffle, setShuffle] = useState(true);
 
-  async function load() {
-    const [nextQuiz, questions, groups] = await Promise.all([
+  useEffect(() => {
+    if (!token) return;
+    Promise.all([
       api<Quiz>(`/api/quizzes/${id}`, {}, token),
       api<Question[]>("/api/questions", {}, token),
       api<ClassGroup[]>("/api/classes", {}, token),
-    ]);
-    setQuiz(nextQuiz);
-    setBank(questions);
-    setClasses(groups);
-    setSelected(nextQuiz.questions.map((question) => question.questionId));
-    setTitle(nextQuiz.title);
-    setInstructions(nextQuiz.instructions || "");
-    setDuration(nextQuiz.durationMinutes);
-    setStart(toLocalInput(nextQuiz.startTime));
-    setEnd(toLocalInput(nextQuiz.endTime));
-    setMaxAttempts(nextQuiz.maxAttempts);
-    setPassingMarks(nextQuiz.passingMarks);
-    setShuffle(nextQuiz.shuffleQuestions);
-  }
-
-  useEffect(() => {
-    if (token) load().catch(setError);
+    ]).then(([nextQuiz, questions, groups]) => {
+      setQuiz(nextQuiz);
+      setBank(questions);
+      setClasses(groups);
+      setSelected(nextQuiz.questions.map((question) => question.questionId));
+      setTitle(nextQuiz.title);
+      setInstructions(nextQuiz.instructions || "");
+      setDuration(nextQuiz.durationMinutes);
+      setStart(toLocalInput(nextQuiz.startTime));
+      setEnd(toLocalInput(nextQuiz.endTime));
+      setMaxAttempts(nextQuiz.maxAttempts);
+      setPassingMarks(nextQuiz.passingMarks);
+      setShuffle(nextQuiz.shuffleQuestions);
+    }).catch(setError);
   }, [token, id]);
 
   async function save(event: FormEvent) {

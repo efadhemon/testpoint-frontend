@@ -1,6 +1,6 @@
 "use client";
 
-import { FormEvent, useEffect, useState } from "react";
+import { FormEvent, useCallback, useEffect, useState } from "react";
 import { Alert, Button, Card, Field, inputClass } from "../../../components/ui";
 import { api, errorMessage } from "../../../lib/api";
 import { useAuth } from "../../../lib/auth";
@@ -20,13 +20,19 @@ export default function QuestionsPage() {
   const [options, setOptions] = useState<Option[]>([emptyOption(), emptyOption()]);
   const [error, setError] = useState<unknown>(null);
 
+  const fetchQuestions = useCallback(
+    () => api<Question[]>("/api/questions", {}, token),
+    [token],
+  );
+
   async function load() {
-    setQuestions(await api<Question[]>("/api/questions", {}, token));
+    setQuestions(await fetchQuestions());
   }
 
   useEffect(() => {
-    if (token) load().catch(setError);
-  }, [token]);
+    if (!token) return;
+    fetchQuestions().then(setQuestions).catch(setError);
+  }, [token, fetchQuestions]);
 
   async function create(event: FormEvent) {
     event.preventDefault();

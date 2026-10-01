@@ -24,24 +24,27 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     const storedToken = localStorage.getItem(TOKEN_KEY);
     const storedUser = localStorage.getItem(USER_KEY);
-    if (storedToken && storedUser) {
-      setToken(storedToken);
-      setUser(JSON.parse(storedUser) as User);
-      api<User>("/api/auth/me", {}, storedToken)
-        .then((fresh) => {
-          setUser(fresh);
-          localStorage.setItem(USER_KEY, JSON.stringify(fresh));
-        })
-        .catch(() => {
-          localStorage.removeItem(TOKEN_KEY);
-          localStorage.removeItem(USER_KEY);
-          setToken(null);
-          setUser(null);
-        })
-        .finally(() => setReady(true));
+    if (!storedToken || !storedUser) {
+      queueMicrotask(() => setReady(true));
       return;
     }
-    setReady(true);
+    const cached = JSON.parse(storedUser) as User;
+    queueMicrotask(() => {
+      setToken(storedToken);
+      setUser(cached);
+    });
+    api<User>("/api/auth/me", {}, storedToken)
+      .then((fresh) => {
+        setUser(fresh);
+        localStorage.setItem(USER_KEY, JSON.stringify(fresh));
+      })
+      .catch(() => {
+        localStorage.removeItem(TOKEN_KEY);
+        localStorage.removeItem(USER_KEY);
+        setToken(null);
+        setUser(null);
+      })
+      .finally(() => setReady(true));
   }, []);
 
   function setSession(session: AuthResponse) {
