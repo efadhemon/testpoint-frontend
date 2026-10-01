@@ -1,36 +1,100 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# TestPoint Frontend
 
-## Getting Started
+Web client for **TestPoint**, a web-based online quiz and assessment system built for CSE352 (Advanced Java Lab), Southeast University.
 
-First, run the development server:
+This Next.js app is the interface for three roles. It calls the Spring Boot API in `testpoint-backend` and does not talk to the database itself.
+
+## Course and student information
+
+| | |
+| --- | --- |
+| Course | Advanced Java Lab (CSE352), Section 03 |
+| Department | Computer Science and Engineering, Southeast University |
+| Submitted to | Miftahul Sheikh, Lecturer, Department of CSE |
+
+| SL | Name | Student ID |
+| --- | --- | --- |
+| 1 | Emon Hossain | 2023000010093 |
+| 2 | Md. Ehtisamul Haque | 2024100010099 |
+| 3 | Md Sajjad Hossain | 2024000010009 |
+| 4 | Abadul Hasan | 2020000010055 |
+| 5 | Tanbir Islam | 2023100010074 |
+
+## What you can do in the app
+
+**Instructor**
+
+- Create a class and share its join code, or enroll a student by email.
+- Add multiple-choice, true/false, and short-answer questions to a personal bank.
+- Upload a lecture PDF and review AI drafts before saving them (requires AI on the API).
+- Build a quiz, set the time window, duration, attempt limit, passing marks, and shuffle, then publish and assign it.
+- Grade pending short answers by hand, or ask the API to grade an attempt with AI.
+- Open analytics for a quiz: attempts, average score, pass rate, and question accuracy.
+
+**Student**
+
+- Join a class with a code.
+- Start an assigned quiz while its window is open and an attempt remains.
+- Answer against a countdown. Changes are saved automatically. Time running out submits the paper.
+- See objective scores immediately. Short answers stay pending until they are graded.
+- Read a result later from history, and request an AI study summary once the attempt is fully graded.
+
+**Admin**
+
+- See counts of users, instructors, students, quizzes, and attempts.
+- Change another user's role or disable an account.
+
+Signed-in users are sent to their own desk. A student cannot open the instructor pages, and the other way around.
+
+## Technology
+
+| Piece | Choice |
+| --- | --- |
+| Framework | Next.js 16 (App Router) |
+| UI | React 19, TypeScript, Tailwind CSS 4 |
+| Auth | JWT stored in the browser and sent as `Authorization: Bearer` |
+
+## Requirements
+
+- Node.js with npm
+- The TestPoint backend running and reachable
+
+The API in this project defaults to `http://localhost:8080`. The backend listens on **8081**, so set the URL when you start the dev server.
+
+## Run
 
 ```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+npm install
+NEXT_PUBLIC_API_URL=http://localhost:8081 npm run dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Open [http://localhost:3000](http://localhost:3000).
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+Production build:
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+```bash
+NEXT_PUBLIC_API_URL=http://localhost:8081 npm run build
+npm start
+```
 
-## Learn More
+## Pages
 
-To learn more about Next.js, take a look at the following resources:
+| Path | Role |
+| --- | --- |
+| `/` | Landing. Signed-in users are redirected to their desk |
+| `/login`, `/register` | Public |
+| `/admin` | Admin |
+| `/instructor` | Instructor overview |
+| `/instructor/classes` | Classes and join codes |
+| `/instructor/questions` | Question bank |
+| `/instructor/questions/generate` | Draft questions from a PDF |
+| `/instructor/quizzes` | Quiz list and create |
+| `/instructor/quizzes/[id]` | Edit, publish, assign |
+| `/instructor/grading` | Short-answer review |
+| `/instructor/analytics/[quizId]` | Quiz analytics |
+| `/student` | Assigned quizzes and class join |
+| `/student/attempt/[id]` | Timed paper |
+| `/student/results/[id]` | Score and feedback |
+| `/student/history` | Past attempts |
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
-
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+Demo accounts are created by the backend seeder. See the backend README for those emails and passwords.
