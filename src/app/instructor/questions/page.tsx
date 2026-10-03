@@ -1,11 +1,13 @@
 "use client";
 
-import { FormEvent, useCallback, useEffect, useState } from "react";
+import { Badge, Group, Radio, SimpleGrid, Stack, Table, Text } from "@mantine/core";
+import { FormEvent, Suspense, useCallback, useEffect, useState } from "react";
 import { Modal } from "../../../components/dialog";
-import { Alert, Button, Card, Field, inputClass } from "../../../components/ui";
+import { Pagination, usePaginationParams } from "../../../components/pagination";
+import { Alert, Area, Button, Card, Field, PageHeader, SelectField, TextInput } from "../../../components/ui";
 import { api, errorMessage } from "../../../lib/api";
 import { useAuth } from "../../../lib/auth";
-import type { Option, Question, QuestionType } from "../../../lib/types";
+import type { Option, Page, Question, QuestionType } from "../../../lib/types";
 
 const typeLabels: Record<QuestionType, string> = {
   MCQ: "Multiple choice",
@@ -63,9 +65,22 @@ function payload(form: FormState) {
   };
 }
 
-export default function QuestionsPage() {
+export default function QuestionsRoute() {
+  return (
+    <Suspense fallback={null}>
+      <QuestionsPage />
+    </Suspense>
+  );
+}
+
+function QuestionsPage() {
   const { token } = useAuth();
+  const { page, size, setPage } = usePaginationParams(10);
   const [questions, setQuestions] = useState<Question[]>([]);
+  const [totalElements, setTotalElements] = useState(0);
+  const [totalPages, setTotalPages] = useState(0);
+  const [reloadKey, setReloadKey] = useState(0);
+  const [loaded, setLoaded] = useState(false);
   const [form, setForm] = useState<FormState>(emptyForm);
   const [editing, setEditing] = useState<Question | null>(null);
   const [creating, setCreating] = useState(false);
@@ -77,18 +92,32 @@ export default function QuestionsPage() {
   const editorOpen = creating || editing !== null;
 
   const fetchQuestions = useCallback(
-    () => api<Question[]>("/api/questions", {}, token),
-    [token],
+    (pageIndex: number) => api<Page<Question>>(`/api/questions?page=${pageIndex}&size=${size}`, {}, token),
+    [token, size],
   );
-
-  async function load() {
-    setQuestions(await fetchQuestions());
-  }
 
   useEffect(() => {
     if (!token) return;
-    fetchQuestions().then(setQuestions).catch(setError);
-  }, [token, fetchQuestions]);
+    let cancelled = false;
+    fetchQuestions(page)
+      .then((result) => {
+        if (cancelled) return;
+        if (result.totalPages > 0 && page > result.totalPages - 1) {
+          setPage(result.totalPages - 1);
+          return;
+        }
+        setQuestions(result.content);
+        setTotalElements(result.totalElements);
+        setTotalPages(result.totalPages);
+        setLoaded(true);
+      })
+      .catch((caught) => {
+        if (!cancelled) setError(caught);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [token, page, size, reloadKey, fetchQuestions]);
 
   function openCreate() {
     setForm(emptyForm());
@@ -121,7 +150,8 @@ export default function QuestionsPage() {
         await api("/api/questions", { method: "POST", body: JSON.stringify(payload(form)) }, token);
       }
       closeEditor();
-      await load();
+      if (!editing) setPage(0);
+      setReloadKey((key) => key + 1);
     } catch (caught) {
       setFormError(caught);
     } finally {
@@ -136,7 +166,7 @@ export default function QuestionsPage() {
     try {
       await api(`/api/questions/${deleting.id}`, { method: "DELETE" }, token);
       setDeleting(null);
-      await load();
+      setReloadKey((key) => key + 1);
     } catch (caught) {
       setError(caught);
     } finally {
@@ -146,38 +176,52 @@ export default function QuestionsPage() {
 
   return (
     <>
-      <div className="flex flex-wrap items-end justify-between gap-3">
-        <div>
-          <h1 className="font-serif text-4xl">Question bank</h1>
-          <p className="mt-1 text-sm text-ink/60">
-            {questions.length === 0 ? "No questions yet." : `${questions.length} question${questions.length === 1 ? "" : "s"}`}
-          </p>
-        </div>
-        <Button onClick={openCreate}>New question</Button>
-      </div>
+      <PageHeader
+        title="Question bank"
+        description={!loaded ? "Loading…" : totalElements === 0 ? "No questions yet." : `${totalElements} question${totalElements === 1 ? "" : "s"}`}
+        action={<Button onClick={openCreate}>New question</Button>}
+      />
       {error ? <Alert>{errorMessage(error)}</Alert> : null}
-      {questions.length === 0 ? (
+      {loaded && totalElements === 0 ? (
         <Card>
-          <p className="text-sm text-ink/70">Create a question to start the bank. Each card shows the prompt, marks, and the answer key.</p>
+          <Text size="sm" c="dimmed">Create a question to start the bank. The table shows the prompt, marks, and the answer key.</Text>
         </Card>
       ) : null}
-      {questions.map((question) => (
-        <Card key={question.id}>
-          <div className="flex flex-wrap items-start justify-between gap-3">
-            <div className="min-w-0 flex-1">
-              <p className="text-xs uppercase tracking-wide text-ink/50">
-                {typeLabels[question.type]} · {question.marks} {question.marks === 1 ? "mark" : "marks"}
-              </p>
-              <p className="mt-2 whitespace-pre-wrap">{question.text}</p>
-            </div>
-            <div className="flex gap-2">
-              <Button tone="ghost" onClick={() => openEdit(question)}>Edit</Button>
-              <Button tone="danger" onClick={() => setDeleting(question)}>Delete</Button>
-            </div>
-          </div>
-          <QuestionKey question={question} />
-        </Card>
-      ))}
+      {questions.length > 0 ? (
+        <Table.ScrollContainer minWidth={860}>
+          <Table striped highlightOnHover withTableBorder bg="white" verticalSpacing="sm">
+            <Table.Thead>
+              <Table.Tr>
+                <Table.Th>Type</Table.Th>
+                <Table.Th>Question</Table.Th>
+                <Table.Th>Marks</Table.Th>
+                <Table.Th>Answer key</Table.Th>
+                <Table.Th />
+              </Table.Tr>
+            </Table.Thead>
+            <Table.Tbody>
+              {questions.map((question) => (
+                <Table.Tr key={question.id}>
+                  <Table.Td><Badge variant="light">{typeLabels[question.type]}</Badge></Table.Td>
+                  <Table.Td maw={360}>
+                    <Text size="sm" style={{ whiteSpace: "pre-wrap" }}>{question.text}</Text>
+                    {question.explanation ? <Text size="xs" c="dimmed" mt={4}>Explanation · {question.explanation}</Text> : null}
+                  </Table.Td>
+                  <Table.Td>{question.marks}</Table.Td>
+                  <Table.Td maw={240}><Text size="sm">{answerSummary(question)}</Text></Table.Td>
+                  <Table.Td>
+                    <Group gap="xs" wrap="nowrap" justify="flex-end">
+                      <Button tone="ghost" onClick={() => openEdit(question)}>Edit</Button>
+                      <Button tone="danger" onClick={() => setDeleting(question)}>Delete</Button>
+                    </Group>
+                  </Table.Td>
+                </Table.Tr>
+              ))}
+            </Table.Tbody>
+          </Table>
+        </Table.ScrollContainer>
+      ) : null}
+      <Pagination page={page} size={size} total={totalElements} onPageChange={setPage} />
       <Modal
         width="lg"
         open={editorOpen}
@@ -185,88 +229,92 @@ export default function QuestionsPage() {
         title={editing ? "Edit question" : "New question"}
         description={editing ? "Update the prompt, marks, and answer key." : "Add a question to your bank."}
       >
-        <form onSubmit={save} className="space-y-4">
-          {formError ? <Alert>{errorMessage(formError)}</Alert> : null}
-          <div className="grid gap-3 sm:grid-cols-2">
-            <Field label="Type">
-              <select className={inputClass()} value={form.type} onChange={(event) => setForm((current) => ({ ...current, type: event.target.value as QuestionType }))}>
-                <option value="MCQ">Multiple choice</option>
-                <option value="TRUE_FALSE">True / false</option>
-                <option value="SHORT_ANSWER">Short answer</option>
-              </select>
+        <form onSubmit={save}>
+          <Stack gap="md">
+            {formError ? <Alert>{errorMessage(formError)}</Alert> : null}
+            <SimpleGrid cols={{ base: 1, sm: 2 }}>
+              <Field label="Type">
+                <SelectField
+                  value={form.type}
+                  onValueChange={(value) => setForm((current) => ({ ...current, type: value as QuestionType }))}
+                  options={[
+                    { value: "MCQ", label: "Multiple choice" },
+                    { value: "TRUE_FALSE", label: "True / false" },
+                    { value: "SHORT_ANSWER", label: "Short answer" },
+                  ]}
+                />
+              </Field>
+              <Field label="Marks">
+                <TextInput type="number" min={1} value={form.marks} onChange={(event) => setForm((current) => ({ ...current, marks: Number(event.target.value) }))} />
+              </Field>
+            </SimpleGrid>
+            <Field label="Question">
+              <Area rows={3} value={form.text} onChange={(event) => setForm((current) => ({ ...current, text: event.target.value }))} required />
             </Field>
-            <Field label="Marks">
-              <input className={inputClass()} type="number" min={1} value={form.marks} onChange={(event) => setForm((current) => ({ ...current, marks: Number(event.target.value) }))} />
-            </Field>
-          </div>
-          <Field label="Question">
-            <textarea className={inputClass()} rows={3} value={form.text} onChange={(event) => setForm((current) => ({ ...current, text: event.target.value }))} required />
-          </Field>
-          {form.type === "MCQ" ? (
-            <div className="space-y-2">
-              {form.options.map((option, index) => (
-                <div key={index} className="flex gap-2">
-                  <input
-                    className={inputClass()}
-                    placeholder={`Option ${index + 1}`}
-                    value={option.text}
-                    onChange={(event) => setForm((current) => ({
-                      ...current,
-                      options: current.options.map((item, itemIndex) => itemIndex === index ? { ...item, text: event.target.value } : item),
-                    }))}
-                    required
-                  />
-                  <label className="flex shrink-0 items-center gap-2 text-sm">
-                    <input
-                      type="radio"
-                      name="correct"
-                      checked={option.correct}
-                      onChange={() => setForm((current) => ({
-                        ...current,
-                        options: current.options.map((item, itemIndex) => ({ ...item, correct: itemIndex === index })),
-                      }))}
-                    />
-                    Correct
-                  </label>
-                  {form.options.length > 2 ? (
-                    <Button tone="ghost" onClick={() => setForm((current) => ({
-                      ...current,
-                      options: current.options.filter((_, itemIndex) => itemIndex !== index),
-                    }))}>
-                      Remove
-                    </Button>
-                  ) : null}
-                </div>
-              ))}
-              <Button
-                tone="ghost"
-                disabled={form.options.length >= 8}
-                onClick={() => setForm((current) => ({ ...current, options: [...current.options, emptyOption()] }))}
+            {form.type === "MCQ" ? (
+              <Radio.Group
+                value={String(form.options.findIndex((option) => option.correct))}
+                onChange={(value) => setForm((current) => ({
+                  ...current,
+                  options: current.options.map((item, itemIndex) => ({ ...item, correct: itemIndex === Number(value) })),
+                }))}
               >
-                Add option
-              </Button>
-            </div>
-          ) : null}
-          {form.type === "TRUE_FALSE" ? (
-            <Field label="Correct answer">
-              <select className={inputClass()} value={String(form.correctBoolean)} onChange={(event) => setForm((current) => ({ ...current, correctBoolean: event.target.value === "true" }))}>
-                <option value="true">True</option>
-                <option value="false">False</option>
-              </select>
+                <Stack gap="sm">
+                  {form.options.map((option, index) => (
+                    <Group key={index} align="center" wrap="nowrap">
+                      <TextInput
+                        style={{ flex: 1 }}
+                        placeholder={`Option ${index + 1}`}
+                        value={option.text}
+                        onChange={(event) => setForm((current) => ({
+                          ...current,
+                          options: current.options.map((item, itemIndex) => itemIndex === index ? { ...item, text: event.target.value } : item),
+                        }))}
+                        required
+                      />
+                      <Radio value={String(index)} label="Correct" />
+                      {form.options.length > 2 ? (
+                        <Button tone="ghost" onClick={() => setForm((current) => ({
+                          ...current,
+                          options: current.options.filter((_, itemIndex) => itemIndex !== index),
+                        }))}>
+                          Remove
+                        </Button>
+                      ) : null}
+                    </Group>
+                  ))}
+                  <Button
+                    tone="ghost"
+                    disabled={form.options.length >= 8}
+                    onClick={() => setForm((current) => ({ ...current, options: [...current.options, emptyOption()] }))}
+                  >
+                    Add option
+                  </Button>
+                </Stack>
+              </Radio.Group>
+            ) : null}
+            {form.type === "TRUE_FALSE" ? (
+              <Field label="Correct answer">
+                <SelectField
+                  value={String(form.correctBoolean)}
+                  onValueChange={(value) => setForm((current) => ({ ...current, correctBoolean: value === "true" }))}
+                  options={[{ value: "true", label: "True" }, { value: "false", label: "False" }]}
+                />
+              </Field>
+            ) : null}
+            {form.type === "SHORT_ANSWER" ? (
+              <Field label="Model answer or rubric">
+                <Area rows={3} value={form.modelAnswer} onChange={(event) => setForm((current) => ({ ...current, modelAnswer: event.target.value }))} required />
+              </Field>
+            ) : null}
+            <Field label="Explanation shown after grading">
+              <TextInput value={form.explanation} onChange={(event) => setForm((current) => ({ ...current, explanation: event.target.value }))} />
             </Field>
-          ) : null}
-          {form.type === "SHORT_ANSWER" ? (
-            <Field label="Model answer or rubric">
-              <textarea className={inputClass()} rows={3} value={form.modelAnswer} onChange={(event) => setForm((current) => ({ ...current, modelAnswer: event.target.value }))} required />
-            </Field>
-          ) : null}
-          <Field label="Explanation shown after grading">
-            <input className={inputClass()} value={form.explanation} onChange={(event) => setForm((current) => ({ ...current, explanation: event.target.value }))} />
-          </Field>
-          <div className="flex justify-end gap-2">
-            <Button tone="ghost" onClick={closeEditor}>Cancel</Button>
-            <Button type="submit" disabled={busy}>{busy ? "Saving…" : editing ? "Save changes" : "Save question"}</Button>
-          </div>
+            <Group justify="flex-end">
+              <Button tone="ghost" onClick={closeEditor}>Cancel</Button>
+              <Button type="submit" disabled={busy}>{busy ? "Saving…" : editing ? "Save changes" : "Save question"}</Button>
+            </Group>
+          </Stack>
         </form>
       </Modal>
       <Modal
@@ -275,41 +323,17 @@ export default function QuestionsPage() {
         title="Delete question"
         description={deleting ? "This removes the question from your bank. It must already be off every quiz." : undefined}
       >
-        <div className="flex justify-end gap-2">
+        <Group justify="flex-end">
           <Button tone="ghost" onClick={() => setDeleting(null)}>Cancel</Button>
           <Button tone="danger" disabled={busy} onClick={remove}>{busy ? "Deleting…" : "Delete"}</Button>
-        </div>
+        </Group>
       </Modal>
     </>
   );
 }
 
-function QuestionKey({ question }: { question: Question }) {
-  return (
-    <div className="mt-4 space-y-2 border-t border-line pt-4">
-      {question.type === "MCQ" ? (
-        <ul className="space-y-1.5">
-          {question.options.map((option) => (
-            <li key={option.id} className={`rounded-xl px-3 py-2 text-sm ${option.correct ? "bg-moss font-medium text-pine" : "bg-paper text-ink/80"}`}>
-              {option.correct ? "Correct · " : ""}{option.text}
-            </li>
-          ))}
-        </ul>
-      ) : null}
-      {question.type === "TRUE_FALSE" ? (
-        <p className="text-sm">
-          Correct answer <span className="font-semibold text-pine">{question.correctBoolean ? "True" : "False"}</span>
-        </p>
-      ) : null}
-      {question.type === "SHORT_ANSWER" && question.modelAnswer ? (
-        <div>
-          <p className="text-xs uppercase tracking-wide text-ink/50">Model answer</p>
-          <p className="mt-1 whitespace-pre-wrap text-sm">{question.modelAnswer}</p>
-        </div>
-      ) : null}
-      {question.explanation ? (
-        <p className="text-sm text-ink/60">Explanation · {question.explanation}</p>
-      ) : null}
-    </div>
-  );
+function answerSummary(question: Question) {
+  if (question.type === "MCQ") return question.options.find((option) => option.correct)?.text ?? "—";
+  if (question.type === "TRUE_FALSE") return question.correctBoolean ? "True" : "False";
+  return question.modelAnswer || "—";
 }

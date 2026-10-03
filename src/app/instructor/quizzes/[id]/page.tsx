@@ -1,12 +1,14 @@
 "use client";
 
+import { Badge, Group, List, SimpleGrid, Stack, Table, Text, Title } from "@mantine/core";
 import { useParams } from "next/navigation";
 import { FormEvent, useEffect, useState } from "react";
 import { Modal } from "../../../../components/dialog";
-import { Alert, Button, Card, inputClass } from "../../../../components/ui";
+import { Alert, Button, Card, PageHeader, SelectField } from "../../../../components/ui";
 import { api, errorMessage } from "../../../../lib/api";
 import { useAuth } from "../../../../lib/auth";
 import { formatWhen } from "../../../../lib/format";
+import { fetchAllQuestions } from "../../../../lib/questions";
 import type { ClassGroup, Question, Quiz, QuizStatus } from "../../../../lib/types";
 import { emptyQuizForm, formFromQuiz, QuizEditorFields, quizPayload, type QuizFormState } from "../editor";
 
@@ -14,6 +16,12 @@ const statusLabels: Record<QuizStatus, string> = {
   DRAFT: "Draft",
   PUBLISHED: "Published",
   CLOSED: "Closed",
+};
+
+const statusColor: Record<QuizStatus, string> = {
+  DRAFT: "gray",
+  PUBLISHED: "blue",
+  CLOSED: "red",
 };
 
 export default function QuizBuilderPage() {
@@ -33,7 +41,7 @@ export default function QuizBuilderPage() {
     if (!token) return;
     Promise.all([
       api<Quiz>(`/api/quizzes/${id}`, {}, token),
-      api<Question[]>("/api/questions", {}, token),
+      fetchAllQuestions(token),
       api<ClassGroup[]>("/api/classes", {}, token),
     ]).then(([nextQuiz, questions, groups]) => {
       setQuiz(nextQuiz);
@@ -107,62 +115,75 @@ export default function QuizBuilderPage() {
     }
   }
 
-  if (!quiz) return <p className="text-sm text-ink/60">Loading quiz…</p>;
+  if (!quiz) return <Text size="sm" c="dimmed">Loading quiz…</Text>;
   const draft = quiz.status === "DRAFT";
   const questions = [...quiz.questions].sort((a, b) => a.position - b.position);
 
   return (
     <>
-      <div className="flex flex-wrap items-end justify-between gap-3">
-        <div>
-          <p className="text-xs uppercase tracking-wide text-ink/50">{statusLabels[quiz.status]} · {quiz.totalMarks} marks</p>
-          <h1 className="font-serif text-4xl">{quiz.title}</h1>
-          {quiz.instructions ? <p className="mt-2 whitespace-pre-wrap text-sm text-ink/70">{quiz.instructions}</p> : null}
-        </div>
-        {draft ? <Button tone="ghost" onClick={openEdit}>Edit</Button> : null}
-      </div>
+      <PageHeader
+        title={quiz.title}
+        description={quiz.instructions || `${quiz.totalMarks} marks`}
+        action={draft ? <Button tone="ghost" onClick={openEdit}>Edit</Button> : <Badge variant="light" color={statusColor[quiz.status]}>{statusLabels[quiz.status]}</Badge>}
+      />
       {error ? <Alert>{errorMessage(error)}</Alert> : null}
       <Card>
-        <dl className="grid gap-2 text-sm sm:grid-cols-2">
-          <div>Opens <span className="font-medium">{formatWhen(quiz.startTime)}</span></div>
-          <div>Closes <span className="font-medium">{formatWhen(quiz.endTime)}</span></div>
-          <div>Minutes <span className="font-medium">{quiz.durationMinutes}</span></div>
-          <div>Attempts <span className="font-medium">{quiz.maxAttempts}</span></div>
-          <div>Passing marks <span className="font-medium">{quiz.passingMarks}</span></div>
-          <div>Shuffle <span className="font-medium">{quiz.shuffleQuestions ? "On" : "Off"}</span></div>
-        </dl>
-        <h2 className="mt-4 font-serif text-2xl">Questions</h2>
-        {questions.length === 0 ? <p className="mt-2 text-sm text-ink/60">No questions yet.</p> : (
-          <ol className="mt-3 space-y-1.5 text-sm">
-            {questions.map((question, index) => (
-              <li key={question.questionId} className="rounded-xl bg-paper px-3 py-2">
-                {index + 1}. {question.text}
-                <span className="text-ink/50"> · {question.marks} {question.marks === 1 ? "mark" : "marks"}</span>
-              </li>
-            ))}
-          </ol>
+        <Group mb="md">
+          <Badge variant="light" color={statusColor[quiz.status]}>{statusLabels[quiz.status]}</Badge>
+          <Text size="sm" c="dimmed">{quiz.totalMarks} marks</Text>
+        </Group>
+        <SimpleGrid cols={{ base: 1, sm: 2 }} spacing="xs">
+          <Text size="sm">Opens <Text span fw={600}>{formatWhen(quiz.startTime)}</Text></Text>
+          <Text size="sm">Closes <Text span fw={600}>{formatWhen(quiz.endTime)}</Text></Text>
+          <Text size="sm">Minutes <Text span fw={600}>{quiz.durationMinutes}</Text></Text>
+          <Text size="sm">Attempts <Text span fw={600}>{quiz.maxAttempts}</Text></Text>
+          <Text size="sm">Passing marks <Text span fw={600}>{quiz.passingMarks}</Text></Text>
+          <Text size="sm">Shuffle <Text span fw={600}>{quiz.shuffleQuestions ? "On" : "Off"}</Text></Text>
+        </SimpleGrid>
+        <Title order={4} mt="lg">Questions</Title>
+        {questions.length === 0 ? <Text size="sm" c="dimmed" mt="sm">No questions yet.</Text> : (
+          <Table mt="sm" verticalSpacing="xs">
+            <Table.Thead>
+              <Table.Tr>
+                <Table.Th>#</Table.Th>
+                <Table.Th>Question</Table.Th>
+                <Table.Th>Marks</Table.Th>
+              </Table.Tr>
+            </Table.Thead>
+            <Table.Tbody>
+              {questions.map((question, index) => (
+                <Table.Tr key={question.questionId}>
+                  <Table.Td>{index + 1}</Table.Td>
+                  <Table.Td>{question.text}</Table.Td>
+                  <Table.Td>{question.marks}</Table.Td>
+                </Table.Tr>
+              ))}
+            </Table.Tbody>
+          </Table>
         )}
-        {draft ? null : <p className="mt-4 text-sm text-ink/60">Published quizzes stay fixed. Close the window if you want to stop new attempts.</p>}
+        {draft ? null : <Text size="sm" c="dimmed" mt="md">Published quizzes stay fixed. Close the window if you want to stop new attempts.</Text>}
       </Card>
-      <div className="flex flex-wrap gap-2">
+      <Group>
         {draft ? <Button onClick={publish}>Publish</Button> : null}
         {quiz.status === "PUBLISHED" ? <Button tone="danger" onClick={closeQuiz}>Close quiz</Button> : null}
-      </div>
+      </Group>
       {quiz.status === "PUBLISHED" ? (
         <Card>
-          <h2 className="font-serif text-2xl">Assign</h2>
-          <div className="mt-3 flex flex-wrap gap-2">
-            <select className={`${inputClass()} max-w-sm`} value={classId} onChange={(event) => setClassId(event.target.value)}>
-              <option value="">Choose a class</option>
-              {classes.map((classGroup) => <option key={classGroup.id} value={classGroup.id}>{classGroup.name}</option>)}
-            </select>
+          <Title order={4}>Assign</Title>
+          <Group mt="md" align="flex-end">
+            <SelectField
+              value={classId}
+              placeholder="Choose a class"
+              onValueChange={setClassId}
+              options={classes.map((classGroup) => ({ value: String(classGroup.id), label: classGroup.name }))}
+            />
             <Button onClick={assign} disabled={!classId}>Assign</Button>
-          </div>
-          <ul className="mt-3 text-sm">
-            {quiz.assignments.length === 0 ? <li className="text-ink/50">Not assigned yet.</li> : quiz.assignments.map((assignment) => (
-              <li key={assignment.id}>{assignment.className || assignment.studentName} · {formatWhen(quiz.startTime)} to {formatWhen(quiz.endTime)}</li>
+          </Group>
+          <List mt="md" spacing="xs">
+            {quiz.assignments.length === 0 ? <List.Item><Text size="sm" c="dimmed">Not assigned yet.</Text></List.Item> : quiz.assignments.map((assignment) => (
+              <List.Item key={assignment.id}>{assignment.className || assignment.studentName} · {formatWhen(quiz.startTime)} to {formatWhen(quiz.endTime)}</List.Item>
             ))}
-          </ul>
+          </List>
         </Card>
       ) : null}
       <Modal
@@ -172,13 +193,15 @@ export default function QuizBuilderPage() {
         title="Edit quiz"
         description="Update the window, marks, and questions."
       >
-        <form onSubmit={save} className="space-y-4">
-          {formError ? <Alert>{errorMessage(formError)}</Alert> : null}
-          <QuizEditorFields form={form} setForm={setForm} bank={bank} />
-          <div className="flex justify-end gap-2">
-            <Button tone="ghost" onClick={closeEdit}>Cancel</Button>
-            <Button type="submit" disabled={busy}>{busy ? "Saving…" : "Save changes"}</Button>
-          </div>
+        <form onSubmit={save}>
+          <Stack gap="md">
+            {formError ? <Alert>{errorMessage(formError)}</Alert> : null}
+            <QuizEditorFields form={form} setForm={setForm} bank={bank} />
+            <Group justify="flex-end">
+              <Button tone="ghost" onClick={closeEdit}>Cancel</Button>
+              <Button type="submit" disabled={busy}>{busy ? "Saving…" : "Save changes"}</Button>
+            </Group>
+          </Stack>
         </form>
       </Modal>
     </>

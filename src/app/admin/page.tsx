@@ -1,8 +1,9 @@
 "use client";
 
+import { Badge, Group, SimpleGrid, Table, Text } from "@mantine/core";
 import { useCallback, useEffect, useState } from "react";
 import { Shell } from "../../components/Shell";
-import { Alert, Card } from "../../components/ui";
+import { Alert, Button, PageHeader, SelectField, Stat } from "../../components/ui";
 import { api, errorMessage } from "../../lib/api";
 import { useAuth } from "../../lib/auth";
 import type { AdminStats, Role, User } from "../../lib/types";
@@ -55,47 +56,59 @@ function AdminDesk() {
 
   return (
     <>
-      <h1 className="font-serif text-4xl">People</h1>
+      <PageHeader title="People" description="Roles, access, and activity across the portal." />
       {stats ? (
-        <div className="grid gap-3 sm:grid-cols-4">
+        <SimpleGrid cols={{ base: 1, sm: 2, lg: 4 }}>
           <Stat label="Users" value={stats.users} />
           <Stat label="Instructors" value={stats.instructors} />
           <Stat label="Students" value={stats.students} />
           <Stat label="Attempts" value={stats.attempts} />
-        </div>
+        </SimpleGrid>
       ) : null}
       {error ? <Alert>{errorMessage(error)}</Alert> : null}
-      <Card>
-        <table className="w-full text-left text-sm">
-          <thead className="text-ink/50">
-            <tr><th className="py-2">Name</th><th>Email</th><th>Role</th><th>Status</th></tr>
-          </thead>
-          <tbody>
-            {users.map((user) => (
-              <tr key={user.id} className="border-t border-line">
-                <td className="py-3">{user.name}</td>
-                <td>{user.email}</td>
-                <td>
-                  <select className="rounded-lg border border-line bg-paper px-2 py-1" value={user.role} onChange={(event) => update(user.id, { role: event.target.value as Role })}>
-                    <option value="ADMIN">Admin</option>
-                    <option value="INSTRUCTOR">Instructor</option>
-                    <option value="STUDENT">Student</option>
-                  </select>
-                </td>
-                <td>
-                  <button className="text-pine" onClick={() => update(user.id, { enabled: !user.enabled })}>
-                    {user.enabled ? "Enabled" : "Disabled"}
-                  </button>
-                </td>
-              </tr>
+      <Table.ScrollContainer minWidth={720}>
+        <Table striped highlightOnHover withTableBorder bg="white">
+          <Table.Thead>
+            <Table.Tr>
+              <Table.Th>Name</Table.Th>
+              <Table.Th>Email</Table.Th>
+              <Table.Th>Role</Table.Th>
+              <Table.Th>Status</Table.Th>
+            </Table.Tr>
+          </Table.Thead>
+          <Table.Tbody>
+            {users.length === 0 ? (
+              <Table.Tr>
+                <Table.Td colSpan={4}><Text size="sm" c="dimmed">No users yet.</Text></Table.Td>
+              </Table.Tr>
+            ) : users.map((user) => (
+              <Table.Tr key={user.id}>
+                <Table.Td>{user.name}</Table.Td>
+                <Table.Td>{user.email}</Table.Td>
+                <Table.Td>
+                  <SelectField
+                    value={user.role}
+                    onValueChange={(role) => update(user.id, { role: role as Role })}
+                    options={[
+                      { value: "ADMIN", label: "Admin" },
+                      { value: "INSTRUCTOR", label: "Instructor" },
+                      { value: "STUDENT", label: "Student" },
+                    ]}
+                  />
+                </Table.Td>
+                <Table.Td>
+                  <Group gap="xs">
+                    <Badge variant="light" color={user.enabled ? "blue" : "gray"}>{user.enabled ? "Enabled" : "Disabled"}</Badge>
+                    <Button tone="ghost" onClick={() => update(user.id, { enabled: !user.enabled })}>
+                      {user.enabled ? "Disable" : "Enable"}
+                    </Button>
+                  </Group>
+                </Table.Td>
+              </Table.Tr>
             ))}
-          </tbody>
-        </table>
-      </Card>
+          </Table.Tbody>
+        </Table>
+      </Table.ScrollContainer>
     </>
   );
-}
-
-function Stat({ label, value }: { label: string; value: number }) {
-  return <Card><p className="text-xs uppercase tracking-wide text-ink/50">{label}</p><p className="font-serif text-3xl">{value}</p></Card>;
 }

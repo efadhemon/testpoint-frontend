@@ -1,5 +1,7 @@
 "use client";
 
+import { AppShell, Burger, Button, Group, NavLink, Stack, Text } from "@mantine/core";
+import { useDisclosure } from "@mantine/hooks";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect } from "react";
@@ -26,6 +28,7 @@ export function Shell({ role, children }: { role: Role; children: React.ReactNod
   const { user, ready, logout } = useAuth();
   const router = useRouter();
   const pathname = usePathname();
+  const [opened, { toggle, close }] = useDisclosure();
 
   useEffect(() => {
     if (!ready) return;
@@ -34,40 +37,78 @@ export function Shell({ role, children }: { role: Role; children: React.ReactNod
   }, [ready, user, role, router]);
 
   if (!ready || !user || user.role !== role) {
-    return <p className="p-8 text-sm text-ink/60">Opening your desk…</p>;
+    return (
+      <Group justify="center" mih="100vh">
+        <Text c="dimmed" size="sm">Opening your desk…</Text>
+      </Group>
+    );
   }
 
   return (
-    <div className="min-h-screen bg-paper text-ink">
-      <header className="border-b border-line bg-card/80">
-        <div className="mx-auto flex max-w-6xl items-center justify-between px-4 py-4">
-          <Link href={homeFor(role)} className="font-serif text-2xl tracking-tight">
-            TestPoint
-          </Link>
-          <div className="flex items-center gap-3 text-sm">
-            <span className="text-ink/70">
-              {user.name}
-              <span className="ml-2 rounded-full bg-moss px-2 py-0.5 text-xs font-semibold uppercase tracking-wide text-pine">{user.role.toLowerCase()}</span>
-            </span>
-            <button className="rounded-full border border-line px-3 py-1" onClick={() => { logout(); router.push("/"); }}>
+    <AppShell
+      header={{ height: 60 }}
+      navbar={{ width: 240, breakpoint: "sm", collapsed: { mobile: !opened } }}
+      padding="lg"
+      styles={{
+        main: { background: "var(--mantine-color-gray-0)" },
+        navbar: {
+          background: "white",
+          borderRight: "1px solid var(--mantine-color-gray-2)",
+        },
+        header: {
+          background: "white",
+          borderBottom: "1px solid var(--mantine-color-gray-2)",
+        },
+      }}
+    >
+      <AppShell.Header>
+        <Group h="100%" px="md" justify="space-between">
+          <Group gap="sm">
+            <Burger opened={opened} onClick={toggle} hiddenFrom="sm" size="sm" aria-label="Open navigation" />
+            <Text component={Link} href={homeFor(role)} fw={700} size="lg" c="dark" td="none">
+              TestPoint
+            </Text>
+          </Group>
+          <Group gap="sm">
+            <Text size="sm">{user.name}</Text>
+            <Button
+              variant="default"
+              size="xs"
+              onClick={() => {
+                logout();
+                router.push("/");
+              }}
+            >
               Sign out
-            </button>
-          </div>
-        </div>
-      </header>
-      <div className="mx-auto grid max-w-6xl gap-6 px-4 py-6 md:grid-cols-[190px_1fr]">
-        <nav className="flex gap-2 overflow-auto md:flex-col">
+            </Button>
+          </Group>
+        </Group>
+      </AppShell.Header>
+      <AppShell.Navbar p="md">
+        <Stack gap={4}>
           {links[role].map((link) => {
             const active = pathname === link.href;
             return (
-              <Link key={link.href} href={link.href} className={`rounded-full px-3 py-2 text-sm ${active ? "bg-pine text-paper" : "hover:bg-moss"}`}>
-                {link.label}
-              </Link>
+              <NavLink
+                key={link.href}
+                component={Link}
+                href={link.href}
+                label={link.label}
+                active={active}
+                onClick={close}
+                variant="light"
+                color="blue"
+                styles={{
+                  root: { borderRadius: "var(--mantine-radius-sm)" },
+                }}
+              />
             );
           })}
-        </nav>
-        <main className="space-y-5">{children}</main>
-      </div>
-    </div>
+        </Stack>
+      </AppShell.Navbar>
+      <AppShell.Main>
+        <Stack gap="md">{children}</Stack>
+      </AppShell.Main>
+    </AppShell>
   );
 }

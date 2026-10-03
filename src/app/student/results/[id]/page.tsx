@@ -1,8 +1,9 @@
 "use client";
 
+import { Group, Stack, Text, Title } from "@mantine/core";
 import { useParams } from "next/navigation";
 import { useEffect, useState } from "react";
-import { Alert, Button, Card } from "../../../../components/ui";
+import { Alert, Button, Card, PageHeader } from "../../../../components/ui";
 import { api, errorMessage } from "../../../../lib/api";
 import { useAuth } from "../../../../lib/auth";
 import type { ResultView } from "../../../../lib/types";
@@ -27,32 +28,34 @@ export default function ResultPage() {
     }
   }
 
-  if (!result) return error ? <Alert>{errorMessage(error)}</Alert> : <p className="text-sm text-ink/60">Loading your result…</p>;
+  if (!result) return error ? <Alert>{errorMessage(error)}</Alert> : <Text size="sm" c="dimmed">Loading your result…</Text>;
 
   return (
     <>
-      <h1 className="font-serif text-4xl">{result.quizTitle}</h1>
+      <PageHeader title={result.quizTitle} description="Your score and the marked paper." />
       <Card>
-        <p className="font-serif text-5xl">{result.score ?? 0}<span className="text-2xl text-ink/40"> / {result.maxScore ?? 0}</span></p>
-        <p className="mt-2 text-sm text-ink/70">
+        <Title order={1}>{result.score ?? 0}<Text span c="dimmed" fz="0.45em"> / {result.maxScore ?? 0}</Text></Title>
+        <Text size="sm" c="dimmed" mt="sm">
           {result.pendingReview ? "Objective questions are marked. Short answers are still with your instructor." : result.passed ? "You reached the passing mark." : "You did not reach the passing mark."}
-        </p>
-        {result.status === "GRADED" ? <div className="mt-4"><Button tone="ghost" onClick={summarize}>Write an AI summary</Button></div> : null}
-        {result.aiSummary ? <p className="mt-4 text-sm leading-6">{result.aiSummary}</p> : null}
+        </Text>
+        {result.status === "GRADED" ? <Group mt="md"><Button tone="ghost" onClick={summarize}>Write an AI summary</Button></Group> : null}
+        {result.aiSummary ? <Text size="sm" mt="md" lh={1.6}>{result.aiSummary}</Text> : null}
       </Card>
       {error ? <Alert>{errorMessage(error)}</Alert> : null}
-      {result.questions.map((question, index) => (
-        <Card key={`${question.questionId}-${index}`}>
-          <p className="text-xs uppercase tracking-wide text-ink/50">
-            {question.awardedMarks == null ? "Pending" : `${question.awardedMarks}/${question.marks}`}
-            {question.gradeSource ? ` · ${question.gradeSource.toLowerCase()}` : ""}
-          </p>
-          <h2 className="mt-1 text-lg">{question.text}</h2>
-          <p className="mt-3 text-sm"><span className="text-ink/50">Your answer. </span>{question.yourAnswer}</p>
-          {question.correctAnswer ? <p className="mt-1 text-sm"><span className="text-ink/50">Expected. </span>{question.correctAnswer}</p> : null}
-          {question.feedback ? <p className="mt-2 text-sm text-pine">{question.feedback}</p> : null}
-        </Card>
-      ))}
+      <Stack gap="md">
+        {result.questions.map((question, index) => (
+          <Card key={`${question.questionId}-${index}`}>
+            <Text size="xs" tt="uppercase" fw={600} c="dimmed">
+              {question.awardedMarks == null ? "Pending" : `${question.awardedMarks}/${question.marks}`}
+              {question.gradeSource ? ` · ${question.gradeSource.toLowerCase()}` : ""}
+            </Text>
+            <Title order={4} mt={4}>{question.text}</Title>
+            <Text size="sm" mt="sm"><Text span c="dimmed">Your answer. </Text>{question.yourAnswer}</Text>
+            {question.correctAnswer ? <Text size="sm" mt={4}><Text span c="dimmed">Expected. </Text>{question.correctAnswer}</Text> : null}
+            {question.feedback ? <Text size="sm" mt="xs" c="blue">{question.feedback}</Text> : null}
+          </Card>
+        ))}
+      </Stack>
     </>
   );
 }

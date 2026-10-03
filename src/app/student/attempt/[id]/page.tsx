@@ -1,8 +1,9 @@
 "use client";
 
+import { Group, Paper, Text, Title } from "@mantine/core";
 import { useParams, useRouter } from "next/navigation";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Alert, Button } from "../../../../components/ui";
+import { Alert, Area, Button, Card, ChoiceGroup } from "../../../../components/ui";
 import { api, errorMessage } from "../../../../lib/api";
 import { useAuth } from "../../../../lib/auth";
 import type { TakeQuestion, TakeView } from "../../../../lib/types";
@@ -94,21 +95,23 @@ export default function AttemptPage() {
     }
   }
 
-  if (!view) return error ? <Alert>{errorMessage(error)}</Alert> : <p className="text-sm text-ink/60">Loading the paper…</p>;
+  if (!view) return error ? <Alert>{errorMessage(error)}</Alert> : <Text size="sm" c="dimmed">Loading the paper…</Text>;
   const minutes = Math.max(0, Math.floor(remaining / 60000));
   const seconds = Math.max(0, Math.floor((remaining % 60000) / 1000));
 
   return (
     <>
-      <div className="sticky top-0 z-10 flex items-center justify-between rounded-2xl border border-line bg-card px-4 py-3">
-        <h1 className="font-serif text-2xl">{view.quizTitle}</h1>
-        <p className={`font-semibold ${remaining < 60000 ? "text-copper" : "text-pine"}`}>{String(minutes).padStart(2, "0")}:{String(seconds).padStart(2, "0")}</p>
-      </div>
+      <Paper withBorder p="sm" radius="md" bg="white" style={{ position: "sticky", top: 0, zIndex: 5 }}>
+        <Group justify="space-between">
+          <Title order={3}>{view.quizTitle}</Title>
+          <Text fw={700} c={remaining < 60000 ? "red" : "blue"}>{String(minutes).padStart(2, "0")}:{String(seconds).padStart(2, "0")}</Text>
+        </Group>
+      </Paper>
       {error ? <Alert>{errorMessage(error)}</Alert> : null}
       {view.questions.map((question, index) => (
         <QuestionCard key={question.id} index={index} question={question} answer={answers[question.id]} onChange={(next) => setAnswers((current) => ({ ...current, [question.id]: next }))} />
       ))}
-      <Button onClick={() => submit(false)}>Submit</Button>
+      <Group><Button onClick={() => submit(false)}>Submit</Button></Group>
     </>
   );
 }
@@ -125,32 +128,26 @@ function QuestionCard({
   onChange: (answer: AnswerState) => void;
 }) {
   return (
-    <section className="rounded-2xl border border-line bg-card p-5">
-      <p className="text-xs uppercase tracking-wide text-ink/50">Question {index + 1} · {question.marks} {question.marks === 1 ? "mark" : "marks"}</p>
-      <h2 className="mt-1 text-lg">{question.text}</h2>
+    <Card>
+      <Text size="xs" tt="uppercase" fw={600} c="dimmed">Question {index + 1} · {question.marks} {question.marks === 1 ? "mark" : "marks"}</Text>
+      <Title order={4} mt={4}>{question.text}</Title>
       {question.type === "MCQ" ? (
-        <div className="mt-3 space-y-2">
-          {question.options.map((option) => (
-            <label key={option.id} className="flex gap-2 text-sm">
-              <input type="radio" name={`q-${question.id}`} checked={answer?.optionId === option.id} onChange={() => onChange({ optionId: option.id, booleanAnswer: null, textAnswer: null })} />
-              {option.text}
-            </label>
-          ))}
-        </div>
+        <ChoiceGroup
+          value={answer?.optionId == null ? "" : String(answer.optionId)}
+          onValueChange={(value) => onChange({ optionId: Number(value), booleanAnswer: null, textAnswer: null })}
+          options={question.options.map((option) => ({ value: String(option.id), label: option.text }))}
+        />
       ) : null}
       {question.type === "TRUE_FALSE" ? (
-        <div className="mt-3 flex gap-4 text-sm">
-          {[true, false].map((value) => (
-            <label key={String(value)} className="flex gap-2">
-              <input type="radio" name={`q-${question.id}`} checked={answer?.booleanAnswer === value} onChange={() => onChange({ optionId: null, booleanAnswer: value, textAnswer: null })} />
-              {value ? "True" : "False"}
-            </label>
-          ))}
-        </div>
+        <ChoiceGroup
+          value={answer?.booleanAnswer == null ? "" : String(answer.booleanAnswer)}
+          onValueChange={(value) => onChange({ optionId: null, booleanAnswer: value === "true", textAnswer: null })}
+          options={[{ value: "true", label: "True" }, { value: "false", label: "False" }]}
+        />
       ) : null}
       {question.type === "SHORT_ANSWER" ? (
-        <textarea className="mt-3 w-full rounded-xl border border-line bg-paper px-3 py-2" rows={4} value={answer?.textAnswer || ""} onChange={(event) => onChange({ optionId: null, booleanAnswer: null, textAnswer: event.target.value })} />
+        <Area mt="sm" rows={4} value={answer?.textAnswer || ""} onChange={(event) => onChange({ optionId: null, booleanAnswer: null, textAnswer: event.target.value })} />
       ) : null}
-    </section>
+    </Card>
   );
 }

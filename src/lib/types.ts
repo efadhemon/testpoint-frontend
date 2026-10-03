@@ -16,6 +16,14 @@ export type AuthResponse = { token: string; user: User };
 
 export type Option = { id?: number; text: string; correct: boolean };
 
+export type Page<T> = {
+  content: T[];
+  page: number;
+  size: number;
+  totalElements: number;
+  totalPages: number;
+};
+
 export type Question = {
   id: number;
   type: QuestionType;

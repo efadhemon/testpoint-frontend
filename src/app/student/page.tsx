@@ -1,12 +1,19 @@
 "use client";
 
+import { Badge, Group, Table, Text } from "@mantine/core";
 import { useRouter } from "next/navigation";
 import { FormEvent, useCallback, useEffect, useState } from "react";
-import { Alert, Button, Card, Field, inputClass } from "../../components/ui";
+import { Alert, Button, Card, Field, PageHeader, TextInput } from "../../components/ui";
 import { api, errorMessage } from "../../lib/api";
 import { useAuth } from "../../lib/auth";
 import { formatWhen } from "../../lib/format";
 import type { ClassGroup, StudentQuiz } from "../../lib/types";
+
+const windowColor: Record<StudentQuiz["windowState"], string> = {
+  UPCOMING: "gray",
+  OPEN: "blue",
+  CLOSED: "red",
+};
 
 export default function StudentHome() {
   const { token } = useAuth();
@@ -66,35 +73,56 @@ export default function StudentHome() {
 
   return (
     <>
-      <h1 className="font-serif text-4xl">Your quizzes</h1>
+      <PageHeader title="Quizzes" description={classes.length === 0 ? "You are not in a class yet." : classes.map((item) => item.name).join(", ")} />
       {error ? <Alert>{errorMessage(error)}</Alert> : null}
       <Card>
-        <form onSubmit={join} className="flex flex-wrap items-end gap-3">
-          <div className="min-w-48">
+        <form onSubmit={join}>
+          <Group align="flex-end">
             <Field label="Join a class">
-              <input className={inputClass()} value={code} onChange={(event) => setCode(event.target.value.toUpperCase())} placeholder="Join code" required />
+              <TextInput value={code} onChange={(event) => setCode(event.target.value.toUpperCase())} placeholder="Join code" required />
             </Field>
-          </div>
-          <Button type="submit">Join</Button>
+            <Button type="submit">Join</Button>
+          </Group>
         </form>
-        <p className="mt-3 text-sm text-ink/60">{classes.length === 0 ? "You are not in a class yet." : classes.map((item) => item.name).join(", ")}</p>
       </Card>
-      {quizzes.length === 0 ? <p className="text-ink/60">No quiz is assigned yet.</p> : null}
-      {quizzes.map((quiz) => (
-        <Card key={quiz.id}>
-          <p className="text-xs uppercase tracking-wide text-ink/50">{quiz.windowState} · {quiz.durationMinutes} min</p>
-          <h2 className="font-serif text-2xl">{quiz.title}</h2>
-          <p className="mt-1 text-sm text-ink/70">{quiz.instructions}</p>
-          <p className="mt-2 text-sm text-ink/60">{formatWhen(quiz.startTime)} – {formatWhen(quiz.endTime)} · {quiz.attemptsUsed}/{quiz.maxAttempts} attempts used</p>
-          <div className="mt-4">
-            {quiz.windowState === "OPEN" && (quiz.inProgressAttemptId || quiz.attemptsUsed < quiz.maxAttempts) ? (
-              <Button onClick={() => start(quiz)}>{quiz.inProgressAttemptId ? "Continue" : "Start"}</Button>
-            ) : (
-              <span className="text-sm text-ink/50">{quiz.windowState === "UPCOMING" ? "Not open yet" : "No attempts left"}</span>
-            )}
-          </div>
-        </Card>
-      ))}
+      {quizzes.length === 0 ? <Text c="dimmed">No quiz is assigned yet.</Text> : (
+        <Table.ScrollContainer minWidth={760}>
+          <Table striped highlightOnHover withTableBorder bg="white" verticalSpacing="sm">
+            <Table.Thead>
+              <Table.Tr>
+                <Table.Th>Quiz</Table.Th>
+                <Table.Th>Window</Table.Th>
+                <Table.Th>Schedule</Table.Th>
+                <Table.Th>Attempts</Table.Th>
+                <Table.Th />
+              </Table.Tr>
+            </Table.Thead>
+            <Table.Tbody>
+              {quizzes.map((quiz) => (
+                <Table.Tr key={quiz.id}>
+                  <Table.Td maw={320}>
+                    <Text fw={600}>{quiz.title}</Text>
+                    {quiz.instructions ? <Text size="xs" c="dimmed" lineClamp={2}>{quiz.instructions}</Text> : null}
+                  </Table.Td>
+                  <Table.Td><Badge variant="light" color={windowColor[quiz.windowState]}>{quiz.windowState}</Badge></Table.Td>
+                  <Table.Td>
+                    <Text size="sm">{formatWhen(quiz.startTime)}</Text>
+                    <Text size="xs" c="dimmed">{formatWhen(quiz.endTime)} · {quiz.durationMinutes} min</Text>
+                  </Table.Td>
+                  <Table.Td>{quiz.attemptsUsed}/{quiz.maxAttempts}</Table.Td>
+                  <Table.Td>
+                    {quiz.windowState === "OPEN" && (quiz.inProgressAttemptId || quiz.attemptsUsed < quiz.maxAttempts) ? (
+                      <Button onClick={() => start(quiz)}>{quiz.inProgressAttemptId ? "Continue" : "Start"}</Button>
+                    ) : (
+                      <Text size="sm" c="dimmed">{quiz.windowState === "UPCOMING" ? "Not open yet" : "No attempts left"}</Text>
+                    )}
+                  </Table.Td>
+                </Table.Tr>
+              ))}
+            </Table.Tbody>
+          </Table>
+        </Table.ScrollContainer>
+      )}
     </>
   );
 }

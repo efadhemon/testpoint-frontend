@@ -1,15 +1,11 @@
+import { ColorSchemeScript, MantineProvider, mantineHtmlProps } from "@mantine/core";
 import type { Metadata } from "next";
-import { Figtree, Fraunces } from "next/font/google";
+import { Figtree } from "next/font/google";
 import { AuthProvider } from "../lib/auth";
 import "./globals.css";
 
 const figtree = Figtree({
   variable: "--font-figtree",
-  subsets: ["latin"],
-});
-
-const fraunces = Fraunces({
-  variable: "--font-fraunces",
   subsets: ["latin"],
 });
 
@@ -20,9 +16,21 @@ export const metadata: Metadata = {
 
 export default function RootLayout({ children }: LayoutProps<"/">) {
   return (
-    <html lang="en" className={`${figtree.variable} ${fraunces.variable} h-full antialiased`} suppressHydrationWarning>
-      <body className="min-h-full" suppressHydrationWarning>
-        <AuthProvider>{children}</AuthProvider>
+    <html lang="en" className={`${figtree.variable} h-full antialiased`} {...mantineHtmlProps}>
+      <head>
+        <ColorSchemeScript defaultColorScheme="light" />
+      </head>
+      <body className="min-h-full">
+        <MantineProvider
+          defaultColorScheme="light"
+          theme={{
+            primaryColor: "blue",
+            fontFamily: "var(--font-figtree), sans-serif",
+            headings: { fontFamily: "var(--font-figtree), sans-serif" },
+          }}
+        >
+          <AuthProvider>{children}</AuthProvider>
+        </MantineProvider>
       </body>
     </html>
   );

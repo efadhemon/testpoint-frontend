@@ -1,13 +1,15 @@
 "use client";
 
-import Link from "next/link";
-import { FormEvent, useCallback, useEffect, useState } from "react";
+import { Badge, Group, Stack, Table, Text } from "@mantine/core";
+import { FormEvent, Suspense, useCallback, useEffect, useState } from "react";
 import { Modal } from "../../../components/dialog";
-import { Alert, Button, Card } from "../../../components/ui";
+import { Pagination, usePaginationParams } from "../../../components/pagination";
+import { Alert, Button, Card, PageHeader } from "../../../components/ui";
 import { api, errorMessage } from "../../../lib/api";
 import { useAuth } from "../../../lib/auth";
 import { formatWhen } from "../../../lib/format";
-import type { Question, Quiz, QuizStatus } from "../../../lib/types";
+import { fetchAllQuestions } from "../../../lib/questions";
+import type { Page, Question, Quiz, QuizStatus } from "../../../lib/types";
 import { emptyQuizForm, formFromQuiz, QuizEditorFields, quizPayload, type QuizFormState } from "./editor";
 
 const statusLabels: Record<QuizStatus, string> = {
@@ -16,9 +18,28 @@ const statusLabels: Record<QuizStatus, string> = {
   CLOSED: "Closed",
 };
 
-export default function QuizzesPage() {
+const statusColor: Record<QuizStatus, string> = {
+  DRAFT: "gray",
+  PUBLISHED: "blue",
+  CLOSED: "red",
+};
+
+export default function QuizzesRoute() {
+  return (
+    <Suspense fallback={null}>
+      <QuizzesPage />
+    </Suspense>
+  );
+}
+
+function QuizzesPage() {
   const { token } = useAuth();
+  const { page, size, setPage } = usePaginationParams(5);
   const [quizzes, setQuizzes] = useState<Quiz[]>([]);
+  const [totalElements, setTotalElements] = useState(0);
+  const [totalPages, setTotalPages] = useState(0);
+  const [reloadKey, setReloadKey] = useState(0);
+  const [loaded, setLoaded] = useState(false);
   const [bank, setBank] = useState<Question[]>([]);
   const [form, setForm] = useState<QuizFormState>(emptyQuizForm);
   const [editing, setEditing] = useState<Quiz | null>(null);
@@ -30,27 +51,46 @@ export default function QuizzesPage() {
 
   const editorOpen = creating || editing !== null;
 
-  const fetchPage = useCallback(
-    () => Promise.all([
-      api<Quiz[]>("/api/quizzes", {}, token),
-      api<Question[]>("/api/questions", {}, token),
-    ]),
-    [token],
+  const fetchQuizzes = useCallback(
+    (pageIndex: number) => api<Page<Quiz>>(`/api/quizzes?page=${pageIndex}&size=${size}`, {}, token),
+    [token, size],
   );
-
-  async function load() {
-    const [nextQuizzes, questions] = await fetchPage();
-    setQuizzes(nextQuizzes);
-    setBank(questions);
-  }
 
   useEffect(() => {
     if (!token) return;
-    fetchPage().then(([nextQuizzes, questions]) => {
-      setQuizzes(nextQuizzes);
-      setBank(questions);
-    }).catch(setError);
-  }, [token, fetchPage]);
+    let cancelled = false;
+    fetchAllQuestions(token).then((questions) => {
+      if (!cancelled) setBank(questions);
+    }).catch((caught) => {
+      if (!cancelled) setError(caught);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [token]);
+
+  useEffect(() => {
+    if (!token) return;
+    let cancelled = false;
+    fetchQuizzes(page)
+      .then((result) => {
+        if (cancelled) return;
+        if (result.totalPages > 0 && page > result.totalPages - 1) {
+          setPage(result.totalPages - 1);
+          return;
+        }
+        setQuizzes(result.content);
+        setTotalElements(result.totalElements);
+        setTotalPages(result.totalPages);
+        setLoaded(true);
+      })
+      .catch((caught) => {
+        if (!cancelled) setError(caught);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [token, page, size, reloadKey, fetchQuizzes]);
 
   function openCreate() {
     setForm(emptyQuizForm());
@@ -83,7 +123,8 @@ export default function QuizzesPage() {
         await api("/api/quizzes", { method: "POST", body: JSON.stringify(quizPayload(form)) }, token);
       }
       closeEditor();
-      await load();
+      if (!editing) setPage(0);
+      setReloadKey((key) => key + 1);
     } catch (caught) {
       setFormError(caught);
     } finally {
@@ -98,7 +139,7 @@ export default function QuizzesPage() {
     try {
       await api(`/api/quizzes/${deleting.id}`, { method: "DELETE" }, token);
       setDeleting(null);
-      await load();
+      setReloadKey((key) => key + 1);
     } catch (caught) {
       setError(caught);
     } finally {
@@ -108,41 +149,66 @@ export default function QuizzesPage() {
 
   return (
     <>
-      <div className="flex flex-wrap items-end justify-between gap-3">
-        <div>
-          <h1 className="font-serif text-4xl">Quizzes</h1>
-          <p className="mt-1 text-sm text-ink/60">
-            {quizzes.length === 0 ? "No quizzes yet." : `${quizzes.length} quiz${quizzes.length === 1 ? "" : "zes"}`}
-          </p>
-        </div>
-        <Button onClick={openCreate}>New quiz</Button>
-      </div>
+      <PageHeader
+        title="Quizzes"
+        description={!loaded ? "Loading…" : totalElements === 0 ? "No quizzes yet." : `${totalElements} quiz${totalElements === 1 ? "" : "zes"}`}
+        action={<Button onClick={openCreate}>New quiz</Button>}
+      />
       {error ? <Alert>{errorMessage(error)}</Alert> : null}
-      {quizzes.length === 0 ? (
+      {loaded && totalElements === 0 ? (
         <Card>
-          <p className="text-sm text-ink/70">Create a draft to set the window, marks, and questions. Publish it from the quiz page once it is ready.</p>
+          <Text size="sm" c="dimmed">Create a draft to set the window, marks, and questions. Publish it from the quiz page once it is ready.</Text>
         </Card>
       ) : null}
-      {quizzes.map((quiz) => (
-        <Card key={quiz.id}>
-          <div className="flex flex-wrap items-start justify-between gap-3">
-            <div className="min-w-0 flex-1">
-              <p className="text-xs uppercase tracking-wide text-ink/50">
-                {statusLabels[quiz.status]} · {quiz.questions.length} {quiz.questions.length === 1 ? "question" : "questions"} · {quiz.totalMarks} marks · {quiz.durationMinutes} min
-              </p>
-              <h2 className="mt-1 font-serif text-2xl">{quiz.title}</h2>
-              {quiz.instructions ? <p className="mt-1 whitespace-pre-wrap text-sm text-ink/70">{quiz.instructions}</p> : null}
-            </div>
-            <div className="flex flex-wrap gap-2">
-              {quiz.status === "DRAFT" ? <Button tone="ghost" onClick={() => openEdit(quiz)}>Edit</Button> : null}
-              <Link href={`/instructor/quizzes/${quiz.id}`} className="inline-flex items-center justify-center rounded-full bg-pine px-4 py-2 text-sm font-semibold text-paper">Open</Link>
-              {quiz.status !== "DRAFT" ? <Link href={`/instructor/analytics/${quiz.id}`} className="inline-flex items-center justify-center rounded-full border border-line px-4 py-2 text-sm font-semibold">Analytics</Link> : null}
-              <Button tone="danger" onClick={() => setDeleting(quiz)}>Delete</Button>
-            </div>
-          </div>
-          <QuizFacts quiz={quiz} />
-        </Card>
-      ))}
+      {quizzes.length > 0 ? (
+        <Table.ScrollContainer minWidth={980}>
+          <Table striped highlightOnHover withTableBorder bg="white" verticalSpacing="sm">
+            <Table.Thead>
+              <Table.Tr>
+                <Table.Th>Quiz</Table.Th>
+                <Table.Th>Status</Table.Th>
+                <Table.Th>Questions</Table.Th>
+                <Table.Th>Marks</Table.Th>
+                <Table.Th>Duration</Table.Th>
+                <Table.Th>Window</Table.Th>
+                <Table.Th>Assigned</Table.Th>
+                <Table.Th />
+              </Table.Tr>
+            </Table.Thead>
+            <Table.Tbody>
+              {quizzes.map((quiz) => {
+                const assigned = quiz.assignments.map((assignment) => assignment.className || assignment.studentName).filter(Boolean);
+                return (
+                  <Table.Tr key={quiz.id}>
+                    <Table.Td maw={280}>
+                      <Text fw={600}>{quiz.title}</Text>
+                      {quiz.instructions ? <Text size="xs" c="dimmed" lineClamp={2}>{quiz.instructions}</Text> : null}
+                    </Table.Td>
+                    <Table.Td><Badge variant="light" color={statusColor[quiz.status]}>{statusLabels[quiz.status]}</Badge></Table.Td>
+                    <Table.Td>{quiz.questions.length}</Table.Td>
+                    <Table.Td>{quiz.totalMarks}</Table.Td>
+                    <Table.Td>{quiz.durationMinutes} min</Table.Td>
+                    <Table.Td>
+                      <Text size="sm">{formatWhen(quiz.startTime)}</Text>
+                      <Text size="xs" c="dimmed">{formatWhen(quiz.endTime)}</Text>
+                    </Table.Td>
+                    <Table.Td>{assigned.length === 0 ? "Not assigned" : assigned.join(", ")}</Table.Td>
+                    <Table.Td>
+                      <Group gap="xs" wrap="nowrap" justify="flex-end">
+                        {quiz.status === "DRAFT" ? <Button tone="ghost" onClick={() => openEdit(quiz)}>Edit</Button> : null}
+                        <Button href={`/instructor/quizzes/${quiz.id}`}>Open</Button>
+                        {quiz.status !== "DRAFT" ? <Button tone="ghost" href={`/instructor/analytics/${quiz.id}`}>Analytics</Button> : null}
+                        <Button tone="danger" onClick={() => setDeleting(quiz)}>Delete</Button>
+                      </Group>
+                    </Table.Td>
+                  </Table.Tr>
+                );
+              })}
+            </Table.Tbody>
+          </Table>
+        </Table.ScrollContainer>
+      ) : null}
+      <Pagination page={page} size={size} total={totalElements} onPageChange={setPage} />
       <Modal
         width="lg"
         open={editorOpen}
@@ -150,13 +216,15 @@ export default function QuizzesPage() {
         title={editing ? "Edit quiz" : "New quiz"}
         description={editing ? "Update the window, marks, and questions. Only a draft can be edited." : "Start a draft. You can publish it after the questions are in place."}
       >
-        <form onSubmit={save} className="space-y-4">
-          {formError ? <Alert>{errorMessage(formError)}</Alert> : null}
-          <QuizEditorFields form={form} setForm={setForm} bank={bank} />
-          <div className="flex justify-end gap-2">
-            <Button tone="ghost" onClick={closeEditor}>Cancel</Button>
-            <Button type="submit" disabled={busy}>{busy ? "Saving…" : editing ? "Save changes" : "Create draft"}</Button>
-          </div>
+        <form onSubmit={save}>
+          <Stack gap="md">
+            {formError ? <Alert>{errorMessage(formError)}</Alert> : null}
+            <QuizEditorFields form={form} setForm={setForm} bank={bank} />
+            <Group justify="flex-end">
+              <Button tone="ghost" onClick={closeEditor}>Cancel</Button>
+              <Button type="submit" disabled={busy}>{busy ? "Saving…" : editing ? "Save changes" : "Create draft"}</Button>
+            </Group>
+          </Stack>
         </form>
       </Modal>
       <Modal
@@ -165,39 +233,11 @@ export default function QuizzesPage() {
         title="Delete quiz"
         description={deleting ? `${deleting.title} will be removed. A quiz that already has attempts cannot be deleted.` : undefined}
       >
-        <div className="flex justify-end gap-2">
+        <Group justify="flex-end">
           <Button tone="ghost" onClick={() => setDeleting(null)}>Cancel</Button>
           <Button tone="danger" disabled={busy} onClick={remove}>{busy ? "Deleting…" : "Delete"}</Button>
-        </div>
+        </Group>
       </Modal>
     </>
-  );
-}
-
-function QuizFacts({ quiz }: { quiz: Quiz }) {
-  const assigned = quiz.assignments.map((assignment) => assignment.className || assignment.studentName).filter(Boolean);
-  const questions = [...quiz.questions].sort((a, b) => a.position - b.position);
-
-  return (
-    <div className="mt-4 space-y-3 border-t border-line pt-4 text-sm">
-      <dl className="grid gap-2 sm:grid-cols-2">
-        <div>Opens <span className="font-medium">{formatWhen(quiz.startTime)}</span></div>
-        <div>Closes <span className="font-medium">{formatWhen(quiz.endTime)}</span></div>
-        <div>Attempts <span className="font-medium">{quiz.maxAttempts}</span></div>
-        <div>Passing marks <span className="font-medium">{quiz.passingMarks}</span></div>
-        <div>Shuffle <span className="font-medium">{quiz.shuffleQuestions ? "On" : "Off"}</span></div>
-        <div>Assigned <span className="font-medium">{assigned.length === 0 ? "Not assigned" : assigned.join(", ")}</span></div>
-      </dl>
-      {questions.length === 0 ? <p className="text-ink/50">No questions yet.</p> : (
-        <ol className="space-y-1.5">
-          {questions.map((question, index) => (
-            <li key={question.questionId} className="rounded-xl bg-paper px-3 py-2">
-              {index + 1}. {question.text}
-              <span className="text-ink/50"> · {question.marks} {question.marks === 1 ? "mark" : "marks"}</span>
-            </li>
-          ))}
-        </ol>
-      )}
-    </div>
   );
 }

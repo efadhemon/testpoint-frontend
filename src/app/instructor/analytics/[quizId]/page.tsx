@@ -1,8 +1,9 @@
 "use client";
 
+import { Group, Progress, SimpleGrid, Stack, Text } from "@mantine/core";
 import { useParams } from "next/navigation";
 import { useEffect, useState } from "react";
-import { Card } from "../../../../components/ui";
+import { Card, PageHeader, Stat } from "../../../../components/ui";
 import { api } from "../../../../lib/api";
 import { useAuth } from "../../../../lib/auth";
 import { percent } from "../../../../lib/format";
@@ -18,31 +19,29 @@ export default function AnalyticsPage() {
     api<QuizAnalytics>(`/api/analytics/quizzes/${quizId}`, {}, token).then(setReport).catch(() => setReport(null));
   }, [token, quizId]);
 
-  if (!report) return <p className="text-sm text-ink/60">Loading the report…</p>;
+  if (!report) return <Text size="sm" c="dimmed">Loading the report…</Text>;
 
   return (
     <>
-      <h1 className="font-serif text-4xl">{report.title}</h1>
-      <div className="grid gap-3 sm:grid-cols-3">
-        <Card><p className="text-xs uppercase tracking-wide text-ink/50">Submitted attempts</p><p className="font-serif text-4xl">{report.attemptCount}</p></Card>
-        <Card><p className="text-xs uppercase tracking-wide text-ink/50">Average</p><p className="font-serif text-4xl">{percent(report.averagePercent)}</p></Card>
-        <Card><p className="text-xs uppercase tracking-wide text-ink/50">Pass rate</p><p className="font-serif text-4xl">{percent(report.passRate)}</p></Card>
-      </div>
+      <PageHeader title={report.title} description="How this quiz was answered." />
+      <SimpleGrid cols={{ base: 1, sm: 3 }}>
+        <Stat label="Submitted attempts" value={report.attemptCount} />
+        <Stat label="Average" value={percent(report.averagePercent)} />
+        <Stat label="Pass rate" value={percent(report.passRate)} />
+      </SimpleGrid>
       <Card>
-        <h2 className="font-serif text-2xl">Question accuracy</h2>
-        <ul className="mt-4 space-y-4">
+        <Text fw={600} mb="md">Question accuracy</Text>
+        <Stack gap="md">
           {report.questions.map((question) => (
-            <li key={question.questionId}>
-              <div className="flex justify-between gap-3 text-sm">
-                <span>{question.text}</span>
-                <span>{percent(question.accuracyPercent)} · {question.responses}</span>
-              </div>
-              <div className="mt-2 h-2 rounded-full bg-line">
-                <div className="h-2 rounded-full bg-pine" style={{ width: `${Math.min(100, question.accuracyPercent)}%` }} />
-              </div>
-            </li>
+            <Stack key={question.questionId} gap={6}>
+              <Group justify="space-between" align="flex-start" wrap="nowrap">
+                <Text size="sm">{question.text}</Text>
+                <Text size="sm" c="dimmed" style={{ flexShrink: 0 }}>{percent(question.accuracyPercent)} · {question.responses}</Text>
+              </Group>
+              <Progress value={Math.min(100, question.accuracyPercent)} size="sm" />
+            </Stack>
           ))}
-        </ul>
+        </Stack>
       </Card>
     </>
   );

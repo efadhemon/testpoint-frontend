@@ -1,7 +1,8 @@
 "use client";
 
+import { Group, SimpleGrid, Stack, Text } from "@mantine/core";
 import type { Dispatch, SetStateAction } from "react";
-import { Field, inputClass } from "../../../components/ui";
+import { Area, Checkbox, Field, TextInput } from "../../../components/ui";
 import { fromLocalInput, toLocalInput } from "../../../lib/format";
 import type { Question, QuestionType, Quiz } from "../../../lib/types";
 
@@ -86,46 +87,44 @@ export function QuizEditorFields({
   return (
     <>
       <Field label="Title">
-        <input className={inputClass()} value={form.title} onChange={(event) => setForm((current) => ({ ...current, title: event.target.value }))} required />
+        <TextInput value={form.title} onChange={(event) => setForm((current) => ({ ...current, title: event.target.value }))} required />
       </Field>
       <Field label="Instructions">
-        <textarea className={inputClass()} rows={2} value={form.instructions} onChange={(event) => setForm((current) => ({ ...current, instructions: event.target.value }))} />
+        <Area rows={2} value={form.instructions} onChange={(event) => setForm((current) => ({ ...current, instructions: event.target.value }))} />
       </Field>
-      <div className="grid gap-3 sm:grid-cols-2">
+      <SimpleGrid cols={{ base: 1, sm: 2 }}>
         <Field label="Minutes">
-          <input className={inputClass()} type="number" min={1} value={form.duration} onChange={(event) => setForm((current) => ({ ...current, duration: Number(event.target.value) }))} />
+          <TextInput type="number" min={1} value={form.duration} onChange={(event) => setForm((current) => ({ ...current, duration: Number(event.target.value) }))} />
         </Field>
         <Field label="Passing marks">
-          <input className={inputClass()} type="number" min={0} value={form.passingMarks} onChange={(event) => setForm((current) => ({ ...current, passingMarks: Number(event.target.value) }))} />
+          <TextInput type="number" min={0} value={form.passingMarks} onChange={(event) => setForm((current) => ({ ...current, passingMarks: Number(event.target.value) }))} />
         </Field>
         <Field label="Opens">
-          <input className={inputClass()} type="datetime-local" value={form.start} onChange={(event) => setForm((current) => ({ ...current, start: event.target.value }))} required />
+          <TextInput type="datetime-local" value={form.start} onChange={(event) => setForm((current) => ({ ...current, start: event.target.value }))} required />
         </Field>
         <Field label="Closes">
-          <input className={inputClass()} type="datetime-local" value={form.end} onChange={(event) => setForm((current) => ({ ...current, end: event.target.value }))} required />
+          <TextInput type="datetime-local" value={form.end} onChange={(event) => setForm((current) => ({ ...current, end: event.target.value }))} required />
         </Field>
         <Field label="Attempts allowed">
-          <input className={inputClass()} type="number" min={1} value={form.maxAttempts} onChange={(event) => setForm((current) => ({ ...current, maxAttempts: Number(event.target.value) }))} />
+          <TextInput type="number" min={1} value={form.maxAttempts} onChange={(event) => setForm((current) => ({ ...current, maxAttempts: Number(event.target.value) }))} />
         </Field>
-        <label className="flex items-center gap-2 text-sm">
-          <input type="checkbox" checked={form.shuffle} onChange={(event) => setForm((current) => ({ ...current, shuffle: event.target.checked }))} />
-          Shuffle question order
-        </label>
-      </div>
-      <div>
-        <p className="text-sm font-medium text-ink/80">Questions</p>
-        {bank.length === 0 ? <p className="mt-2 text-sm text-ink/60">Add questions to the bank first.</p> : null}
-        <ul className="mt-2 max-h-52 space-y-2 overflow-y-auto">
+        <Group align="center" gap="sm" h="100%">
+          <Checkbox checked={form.shuffle} onCheckedChange={(checked) => setForm((current) => ({ ...current, shuffle: checked }))} />
+          <Text size="sm">Shuffle question order</Text>
+        </Group>
+      </SimpleGrid>
+      <Stack gap="xs">
+        <Text size="sm" fw={500}>Questions</Text>
+        {bank.length === 0 ? <Text size="sm" c="dimmed">Add questions to the bank first.</Text> : null}
+        <Stack gap="xs" mah={220} style={{ overflowY: "auto" }}>
           {bank.map((question) => (
-            <li key={question.id}>
-              <label className="flex gap-3 text-sm">
-                <input type="checkbox" checked={form.questionIds.includes(question.id)} onChange={() => toggle(question.id)} />
-                <span><span className="text-ink/50">{typeLabels[question.type]}</span> · {question.text}</span>
-              </label>
-            </li>
+            <Group key={question.id} align="flex-start" wrap="nowrap" gap="sm">
+              <Checkbox checked={form.questionIds.includes(question.id)} onCheckedChange={() => toggle(question.id)} />
+              <Text size="sm"><Text span c="dimmed">{typeLabels[question.type]}</Text> · {question.text}</Text>
+            </Group>
           ))}
-        </ul>
-      </div>
+        </Stack>
+      </Stack>
     </>
   );
 }

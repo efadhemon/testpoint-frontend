@@ -1,7 +1,8 @@
 "use client";
 
+import { Group, SimpleGrid, Stack, Text, Title } from "@mantine/core";
 import { useCallback, useEffect, useState } from "react";
-import { Alert, Button, Card, Field, inputClass } from "../../../components/ui";
+import { Alert, Button, Card, Field, PageHeader, TextInput } from "../../../components/ui";
 import { api, errorMessage } from "../../../lib/api";
 import { useAuth } from "../../../lib/auth";
 import type { PendingAnswer } from "../../../lib/types";
@@ -64,30 +65,32 @@ export default function GradingPage() {
 
   return (
     <>
-      <h1 className="font-serif text-4xl">Short answers</h1>
+      <PageHeader title="Short answers" description="Review written answers and save a mark." />
       {error ? <Alert>{errorMessage(error)}</Alert> : null}
-      {ready && pending.length === 0 ? <p className="text-ink/60">Nothing is waiting for a mark.</p> : null}
+      {ready && pending.length === 0 ? <Text c="dimmed">Nothing is waiting for a mark.</Text> : null}
       {attempts.map((attemptId) => (
-        <div key={attemptId} className="space-y-3">
-          <Button tone="ghost" onClick={() => gradeAi(attemptId)}>Suggest marks with AI</Button>
+        <Stack key={attemptId} gap="sm">
+          <Group>
+            <Button tone="ghost" onClick={() => gradeAi(attemptId)}>Suggest marks with AI</Button>
+          </Group>
           {pending.filter((row) => row.attemptId === attemptId).map((row) => (
             <Card key={row.answerId}>
-              <p className="text-xs uppercase tracking-wide text-ink/50">{row.quizTitle} · {row.studentName}</p>
-              <h2 className="mt-1 font-serif text-2xl">{row.questionText}</h2>
-              <p className="mt-3 text-sm"><span className="text-ink/50">Rubric. </span>{row.modelAnswer}</p>
-              <p className="mt-2 text-sm"><span className="text-ink/50">Answer. </span>{row.textAnswer || "No answer"}</p>
-              <div className="mt-4 grid gap-3 md:grid-cols-[120px_1fr_auto]">
+              <Text size="xs" tt="uppercase" fw={600} c="dimmed">{row.quizTitle} · {row.studentName}</Text>
+              <Title order={4} mt={4}>{row.questionText}</Title>
+              <Text size="sm" mt="sm"><Text span c="dimmed">Rubric. </Text>{row.modelAnswer}</Text>
+              <Text size="sm" mt={4}><Text span c="dimmed">Answer. </Text>{row.textAnswer || "No answer"}</Text>
+              <SimpleGrid mt="md" cols={{ base: 1, md: 3 }} style={{ alignItems: "end" }}>
                 <Field label={`Marks out of ${row.marks}`}>
-                  <input className={inputClass()} type="number" min={0} max={row.marks} value={marks[row.answerId] ?? 0} onChange={(event) => setMarks((current) => ({ ...current, [row.answerId]: Number(event.target.value) }))} />
+                  <TextInput type="number" min={0} max={row.marks} value={marks[row.answerId] ?? 0} onChange={(event) => setMarks((current) => ({ ...current, [row.answerId]: Number(event.target.value) }))} />
                 </Field>
                 <Field label="Feedback">
-                  <input className={inputClass()} value={feedback[row.answerId] || ""} onChange={(event) => setFeedback((current) => ({ ...current, [row.answerId]: event.target.value }))} />
+                  <TextInput value={feedback[row.answerId] || ""} onChange={(event) => setFeedback((current) => ({ ...current, [row.answerId]: event.target.value }))} />
                 </Field>
-                <div className="flex items-end"><Button onClick={() => grade(row.answerId)}>Save mark</Button></div>
-              </div>
+                <Group align="flex-end" h="100%"><Button onClick={() => grade(row.answerId)}>Save mark</Button></Group>
+              </SimpleGrid>
             </Card>
           ))}
-        </div>
+        </Stack>
       ))}
     </>
   );

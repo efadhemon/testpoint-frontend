@@ -1,7 +1,8 @@
 "use client";
 
+import { Badge, FileInput, Group, List, Text } from "@mantine/core";
 import { FormEvent, useState } from "react";
-import { Alert, Button, Card, Field, inputClass } from "../../../../components/ui";
+import { Alert, Area, Button, Card, PageHeader } from "../../../../components/ui";
 import { api, errorMessage } from "../../../../lib/api";
 import { useAuth } from "../../../../lib/auth";
 import type { QuestionDraft } from "../../../../lib/types";
@@ -9,14 +10,14 @@ import type { QuestionDraft } from "../../../../lib/types";
 export default function GeneratePage() {
   const { token } = useAuth();
   const [drafts, setDrafts] = useState<QuestionDraft[]>([]);
+  const [file, setFile] = useState<File | null>(null);
   const [error, setError] = useState<unknown>(null);
   const [message, setMessage] = useState("");
   const [pending, setPending] = useState(false);
 
   async function upload(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    const file = new FormData(event.currentTarget).get("file");
-    if (!(file instanceof File) || file.size === 0) return;
+    if (!file || file.size === 0) return;
     setPending(true);
     setError(null);
     setMessage("");
@@ -48,36 +49,35 @@ export default function GeneratePage() {
 
   return (
     <>
-      <h1 className="font-serif text-4xl">Questions from a lecture PDF</h1>
-      <p className="text-ink/70">The draft stays here until you save it. Nothing is published automatically.</p>
+      <PageHeader title="Questions from a lecture PDF" description="The draft stays here until you save it. Nothing is published automatically." />
       {error ? <Alert>{errorMessage(error)}</Alert> : null}
-      {message ? <p className="text-sm text-pine">{message}</p> : null}
+      {message ? <Text size="sm" c="blue">{message}</Text> : null}
       <Card>
-        <form onSubmit={upload} className="flex flex-wrap items-end gap-3">
-          <Field label="Lecture PDF">
-            <input name="file" type="file" accept="application/pdf" className={inputClass()} required />
-          </Field>
-          <Button type="submit" disabled={pending}>{pending ? "Reading…" : "Generate drafts"}</Button>
+        <form onSubmit={upload}>
+          <Group align="flex-end">
+            <FileInput label="Lecture PDF" placeholder="Choose a PDF" accept="application/pdf" value={file} onChange={setFile} required style={{ flex: 1, minWidth: 240 }} />
+            <Button type="submit" disabled={pending || !file}>{pending ? "Reading…" : "Generate drafts"}</Button>
+          </Group>
         </form>
       </Card>
       {drafts.map((draft, index) => (
         <Card key={index}>
-          <p className="text-xs uppercase tracking-wide text-ink/50">{draft.type}</p>
-          <textarea className={`${inputClass()} mt-2`} rows={3} value={draft.text} onChange={(event) => update(index, { text: event.target.value })} />
+          <Badge variant="light">{draft.type}</Badge>
+          <Area mt="sm" rows={3} value={draft.text} onChange={(event) => update(index, { text: event.target.value })} />
           {draft.type === "SHORT_ANSWER" ? (
-            <textarea className={`${inputClass()} mt-2`} rows={2} value={draft.modelAnswer || ""} onChange={(event) => update(index, { modelAnswer: event.target.value })} />
+            <Area mt="sm" rows={2} value={draft.modelAnswer || ""} onChange={(event) => update(index, { modelAnswer: event.target.value })} />
           ) : null}
           {draft.type === "MCQ" ? (
-            <ul className="mt-2 space-y-1 text-sm">
+            <List mt="sm" spacing={4}>
               {(draft.options || []).map((option, optionIndex) => (
-                <li key={optionIndex}>{option.correct ? "●" : "○"} {option.text}</li>
+                <List.Item key={optionIndex}>{option.correct ? "●" : "○"} {option.text}</List.Item>
               ))}
-            </ul>
+            </List>
           ) : null}
-          {draft.type === "TRUE_FALSE" ? <p className="mt-2 text-sm">Correct answer: {draft.correctBoolean ? "True" : "False"}</p> : null}
+          {draft.type === "TRUE_FALSE" ? <Text size="sm" mt="sm">Correct answer: {draft.correctBoolean ? "True" : "False"}</Text> : null}
         </Card>
       ))}
-      {drafts.length > 0 ? <Button onClick={saveAll}>Save all to the bank</Button> : null}
+      {drafts.length > 0 ? <Group><Button onClick={saveAll}>Save all to the bank</Button></Group> : null}
     </>
   );
 }
